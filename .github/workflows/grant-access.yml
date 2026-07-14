@@ -17,7 +17,7 @@ jobs:
         env:
           ACTOR: ${{ github.actor }}
         run: |
-          APPROVERS="your-username-here,test-user-here"
+          APPROVERS="pujadas02"
           if [[ ! "$APPROVERS" == *"$ACTOR"* ]]; then
             echo "❌ Error: '$ACTOR' is not an authorized approver!"
             exit 1
