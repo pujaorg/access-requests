@@ -37,9 +37,9 @@ body:
     id: unit
     attributes:
       label: Time Unit
-      description: Choose whether the duration is in hours or days
+      description: Choose whether the duration is in min or days
       options:
-        - Hours
+        - Minutes
         - Days
     validations:
       required: true
