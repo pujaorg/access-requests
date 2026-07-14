@@ -34,7 +34,6 @@ body:
         - Admin
     validations:
       required: true
-    default: 0
  
   - type: input
     id: duration
