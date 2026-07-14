@@ -1,0 +1,40 @@
+name: Team Access Request
+description: Request to be added to a GitHub team
+title: "[Team Request]: "
+labels: ["access-request", "team-based"]
+body:
+  - type: input
+    id: username
+    attributes:
+      label: Your GitHub Username
+      description: Enter your GitHub username (not your email, not your display name)
+      placeholder: "e.g., yourusername"
+    validations:
+      required: true
+ 
+  - type: input
+    id: team
+    attributes:
+      label: GitHub Team Name
+      description: The exact name of the GitHub team you need to be added to (e.g., backend-developers, frontend-team, devops-admins)
+      placeholder: "e.g., backend-developers"
+    validations:
+      required: true
+ 
+  - type: input
+    id: duration
+    attributes:
+      label: Duration (days)
+      description: How many days do you need to be part of this team?
+      placeholder: "e.g., 7"
+    validations:
+      required: true
+ 
+  - type: textarea
+    id: justification
+    attributes:
+      label: Justification
+      description: Why do you need to be added to this team? What will you be working on?
+      placeholder: "Explain your use case..."
+    validations:
+      required: true
