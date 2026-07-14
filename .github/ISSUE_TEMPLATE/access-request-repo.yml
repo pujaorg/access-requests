@@ -1,0 +1,55 @@
+name: Repo Access Request (Exception)
+description: Request direct access to a specific repository (for exceptions only)
+title: "[Repo Request]: "
+labels: ["access-request", "repo-based"]
+body:
+  - type: input
+    id: username
+    attributes:
+      label: Your GitHub Username
+      description: Enter your GitHub username (not your email, not your display name)
+      placeholder: "e.g., yourusername"
+    validations:
+      required: true
+ 
+  - type: input
+    id: repo
+    attributes:
+      label: Repository Name
+      description: The exact repository name in the format owner/repo-name (e.g., my-org/backend-api)
+      placeholder: "e.g., my-org/backend-api"
+    validations:
+      required: true
+ 
+  - type: dropdown
+    id: permission
+    attributes:
+      label: Permission Level
+      description: Select the level of access you need for this repository
+      options:
+        - Read
+        - Triage
+        - Write
+        - Maintain
+        - Admin
+    validations:
+      required: true
+    default: 0
+ 
+  - type: input
+    id: duration
+    attributes:
+      label: Duration (days)
+      description: How many days do you need this repository access for?
+      placeholder: "e.g., 7"
+    validations:
+      required: true
+ 
+  - type: textarea
+    id: justification
+    attributes:
+      label: Justification
+      description: Why do you need access to this specific repository? For what purpose?
+      placeholder: "Explain your use case..."
+    validations:
+      required: true
