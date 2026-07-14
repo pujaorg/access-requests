@@ -38,46 +38,60 @@ jobs:
           echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
  
+      - name: Debug Issue Body
+        run: |
+          echo "===== ISSUE BODY ====="
+          echo "${{ steps.get_issue.outputs.issue_body }}"
+          echo "======================"
+ 
       - name: Parse request details
         id: parse
         run: |
           BODY="${{ steps.get_issue.outputs.issue_body }}"
           
           # Extract username
-          USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username\n).*' | head -1 | xargs)
+          USERNAME=$(echo "$BODY" | awk '/Your GitHub Username/{getline; print}' | head -1 | xargs)
           if [ -z "$USERNAME" ]; then
             USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username: ).*' | head -1 | xargs)
           fi
+          if [ -z "$USERNAME" ]; then
+            USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username\n).*' | head -1 | xargs)
+          fi
           
-          # Determine request type from labels
           LABELS="${{ github.event.issue.labels.*.name }}"
           
           if [[ "$LABELS" == *"team-based"* ]]; then
-            TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name\n).*' | head -1 | xargs)
+            TEAM=$(echo "$BODY" | awk '/GitHub Team Name/{getline; print}' | head -1 | xargs)
             if [ -z "$TEAM" ]; then
               TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name: ).*' | head -1 | xargs)
             fi
+            if [ -z "$TEAM" ]; then
+              TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name\n).*' | head -1 | xargs)
+            fi
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
-            echo "target_type=Team" >> $GITHUB_OUTPUT
           elif [[ "$LABELS" == *"repo-based"* ]]; then
-            REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name\n).*' | head -1 | xargs)
+            REPO=$(echo "$BODY" | awk '/Repository Name/{getline; print}' | head -1 | xargs)
             if [ -z "$REPO" ]; then
               REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name: ).*' | head -1 | xargs)
             fi
-            PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level\n).*' | head -1 | xargs)
+            if [ -z "$REPO" ]; then
+              REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name\n).*' | head -1 | xargs)
+            fi
+            PERMISSION=$(echo "$BODY" | awk '/Permission Level/{getline; print}' | head -1 | xargs)
             if [ -z "$PERMISSION" ]; then
               PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level: ).*' | head -1 | xargs)
+            fi
+            if [ -z "$PERMISSION" ]; then
+              PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level\n).*' | head -1 | xargs)
             fi
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
             echo "type=repo" >> $GITHUB_OUTPUT
             echo "target=$REPO" >> $GITHUB_OUTPUT
             echo "permission=$PERMISSION_LOWER" >> $GITHUB_OUTPUT
-            echo "target_type=Repository" >> $GITHUB_OUTPUT
           fi
           
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
-          echo "labels=$LABELS" >> $GITHUB_OUTPUT
  
       - name: Debug Output
         run: |
