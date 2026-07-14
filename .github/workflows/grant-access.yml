@@ -35,10 +35,6 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
             > issue.json
           
-          echo "===== ISSUE BODY ====="
-          cat issue.json | jq -r '.body' | head -20
-          echo "======================"
-          
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.body' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -49,32 +45,28 @@ jobs:
           BODY="${{ steps.get_issue.outputs.body }}"
           
           # Extract username
-          USERNAME=$(echo "$BODY" | grep -i "Your GitHub Username" -A 1 | tail -1 | xargs)
+          USERNAME=$(echo "$BODY" | grep -oP '(?<=### Your GitHub Username\n).*' | head -1 | xargs)
           if [ -z "$USERNAME" ]; then
-            USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username: ).*' | head -1 | xargs)
+            USERNAME=$(echo "$BODY" | grep -oP '(?<=### Your GitHub Username\n---\n).*' | head -1 | xargs)
           fi
           
-          # Determine type from labels
           LABELS="${{ github.event.issue.labels.*.name }}"
           
-          echo "Username: $USERNAME"
-          echo "Labels: $LABELS"
-          
           if [[ "$LABELS" == *"team-based"* ]]; then
-            TEAM=$(echo "$BODY" | grep -i "GitHub Team Name" -A 1 | tail -1 | xargs)
+            TEAM=$(echo "$BODY" | grep -oP '(?<=### GitHub Team Name\n).*' | head -1 | xargs)
             if [ -z "$TEAM" ]; then
-              TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name: ).*' | head -1 | xargs)
+              TEAM=$(echo "$BODY" | grep -oP '(?<=### GitHub Team Name\n---\n).*' | head -1 | xargs)
             fi
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
           elif [[ "$LABELS" == *"repo-based"* ]]; then
-            REPO=$(echo "$BODY" | grep -i "Repository Name" -A 1 | tail -1 | xargs)
+            REPO=$(echo "$BODY" | grep -oP '(?<=### Repository Name\n).*' | head -1 | xargs)
             if [ -z "$REPO" ]; then
-              REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name: ).*' | head -1 | xargs)
+              REPO=$(echo "$BODY" | grep -oP '(?<=### Repository Name\n---\n).*' | head -1 | xargs)
             fi
-            PERMISSION=$(echo "$BODY" | grep -i "Permission Level" -A 1 | tail -1 | xargs)
+            PERMISSION=$(echo "$BODY" | grep -oP '(?<=### Permission Level\n).*' | head -1 | xargs)
             if [ -z "$PERMISSION" ]; then
-              PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level: ).*' | head -1 | xargs)
+              PERMISSION=$(echo "$BODY" | grep -oP '(?<=### Permission Level\n---\n).*' | head -1 | xargs)
             fi
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
             echo "type=repo" >> $GITHUB_OUTPUT
@@ -90,5 +82,84 @@ jobs:
           echo "Type: ${{ steps.parse.outputs.type }}"
           echo "Target: ${{ steps.parse.outputs.target }}"
  
-      # Rest of the steps (Grant team access, Grant repo access, Comment, Close)
-      # ... keep them as they were
+      - name: Grant team access
+        if: steps.parse.outputs.type == 'team' && steps.parse.outputs.username != '' && steps.parse.outputs.target != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          USERNAME: ${{ steps.parse.outputs.username }}
+          TEAM: ${{ steps.parse.outputs.target }}
+        run: |
+          echo "Adding $USERNAME to team $TEAM..."
+          ORG="${{ github.repository_owner }}"
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/orgs/$ORG/teams/$TEAM/memberships/$USERNAME")
+          
+          if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "❌ Failed to add user to team. HTTP code: $RESPONSE"
+            exit 1
+          fi
+ 
+      - name: Grant repo access
+        if: steps.parse.outputs.type == 'repo' && steps.parse.outputs.username != '' && steps.parse.outputs.target != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          USERNAME: ${{ steps.parse.outputs.username }}
+          REPO: ${{ steps.parse.outputs.target }}
+          PERMISSION: ${{ steps.parse.outputs.permission }}
+        run: |
+          echo "Adding $USERNAME to $REPO with $PERMISSION access..."
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/collaborators/$USERNAME" \
+            -d "{\"permission\": \"$PERMISSION\"}")
+          
+          if [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "❌ Failed to grant access. HTTP code: $RESPONSE"
+            exit 1
+          fi
+ 
+      - name: Comment on issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          USERNAME: ${{ steps.parse.outputs.username }}
+          TARGET: ${{ steps.parse.outputs.target }}
+          TYPE: ${{ steps.parse.outputs.type }}
+          PERMISSION: ${{ steps.parse.outputs.permission }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [ "$TYPE" == "team" ]; then
+            COMMENT="✅ **Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Status:** ✅ User has been added to the team."
+          else
+            COMMENT="✅ **Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Status:** ✅ Access has been granted."
+          fi
+          
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
+            -d "{\"body\": \"$COMMENT\"}"
+ 
+      - name: Close issue
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          curl -X PATCH \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
+            -d "{\"state\": \"closed\"}"
