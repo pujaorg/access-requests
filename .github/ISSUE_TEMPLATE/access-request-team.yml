@@ -21,7 +21,6 @@ body:
         - "Select a team..."
         - team-beta-mix
         - team-alpha-read
-      placeholder: "e.g., backend-developers"
     validations:
       required: true
  
