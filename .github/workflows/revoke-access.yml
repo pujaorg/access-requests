@@ -2,36 +2,33 @@ name: Revoke Expired Access
  
 on:
   schedule:
-    - cron: '0 0 * * *'   
-  workflow_dispatch:      
+    - cron: '*/10 * * * *'   # Runs every 10 minutes for testing
+  workflow_dispatch:          # Allows manual trigger
  
 permissions:
-  contents: write
+  contents: read
   issues: write
  
 jobs:
   revoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
- 
-      - name: Revoke expired access
+      - name: Get all closed issues with expiration labels
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          echo "Starting revocation check..."
+          echo "🔍 Checking for expired access..."
           
-          # Get all open issues with the access-request label
+          # Get all closed issues with access-request label
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$REPO/issues?labels=access-request&state=open&per_page=100" \
-            > issues.json
+            "https://api.github.com/repos/$REPO/issues?labels=access-request&state=closed&per_page=100" \
+            > closed_issues.json
           
-          echo "Found open access requests:"
-          cat issues.json | jq -r '.[] | "#\(.number): \(.title)"'
+          echo "📋 Found closed issues:"
+          cat closed_issues.json | jq -r '.[] | "#\(.number): \(.title)"'
           
-          # Note: Full revocation logic requires storing expiration dates
-          # This is a placeholder that will be expanded later
-          echo "Revocation check complete"
+          # Extract expiration from labels or comments
+          # This is a placeholder - full revocation logic will be added here
+          echo "✅ Revocation check complete"
