@@ -18,9 +18,10 @@ body:
       label: GitHub Team Name
       description: The exact name of the GitHub team you need to be added to (e.g., backend-developers, frontend-team, devops-admins)
       options:
+        - "Select a team..."
         - team-beta-mix
         - team-alpha-read
-      placeholder: "e.g., backend-developers"
+      # placeholder: "e.g., backend-developers"
     validations:
       required: true
  
