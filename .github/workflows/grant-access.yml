@@ -44,29 +44,60 @@ jobs:
         run: |
           BODY="${{ steps.get_issue.outputs.body }}"
           
-          # Extract username
-          USERNAME=$(echo "$BODY" | grep -oP '(?<=### Your GitHub Username\n).*' | head -1 | xargs)
+          # Debug: Print the raw body (first 500 chars)
+          echo "===== RAW BODY (first 500 chars) ====="
+          echo "$BODY" | head -c 500
+          echo ""
+          echo "======================================"
+          
+          # Extract using simple patterns
+          # Pattern 1: "### Your GitHub Username" followed by newline and value
+          USERNAME=$(echo "$BODY" | grep -A 1 "### Your GitHub Username" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -1)
+          if [ -z "$USERNAME" ] || [[ "$USERNAME" == "---"* ]]; then
+            USERNAME=""
+          fi
           if [ -z "$USERNAME" ]; then
-            USERNAME=$(echo "$BODY" | grep -oP '(?<=### Your GitHub Username\n---\n).*' | head -1 | xargs)
+            USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username\s*\n\s*).*' | head -1 | xargs)
+          fi
+          if [ -z "$USERNAME" ]; then
+            USERNAME=$(echo "$BODY" | grep -oP '(?<=Your GitHub Username\n---\n).*' | head -1 | xargs)
           fi
           
           LABELS="${{ github.event.issue.labels.*.name }}"
           
           if [[ "$LABELS" == *"team-based"* ]]; then
-            TEAM=$(echo "$BODY" | grep -oP '(?<=### GitHub Team Name\n).*' | head -1 | xargs)
+            TEAM=$(echo "$BODY" | grep -A 1 "### GitHub Team Name" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -1)
+            if [ -z "$TEAM" ] || [[ "$TEAM" == "---"* ]]; then
+              TEAM=""
+            fi
             if [ -z "$TEAM" ]; then
-              TEAM=$(echo "$BODY" | grep -oP '(?<=### GitHub Team Name\n---\n).*' | head -1 | xargs)
+              TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name\s*\n\s*).*' | head -1 | xargs)
+            fi
+            if [ -z "$TEAM" ]; then
+              TEAM=$(echo "$BODY" | grep -oP '(?<=GitHub Team Name\n---\n).*' | head -1 | xargs)
             fi
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
           elif [[ "$LABELS" == *"repo-based"* ]]; then
-            REPO=$(echo "$BODY" | grep -oP '(?<=### Repository Name\n).*' | head -1 | xargs)
-            if [ -z "$REPO" ]; then
-              REPO=$(echo "$BODY" | grep -oP '(?<=### Repository Name\n---\n).*' | head -1 | xargs)
+            REPO=$(echo "$BODY" | grep -A 1 "### Repository Name" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -1)
+            if [ -z "$REPO" ] || [[ "$REPO" == "---"* ]]; then
+              REPO=""
             fi
-            PERMISSION=$(echo "$BODY" | grep -oP '(?<=### Permission Level\n).*' | head -1 | xargs)
+            if [ -z "$REPO" ]; then
+              REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name\s*\n\s*).*' | head -1 | xargs)
+            fi
+            if [ -z "$REPO" ]; then
+              REPO=$(echo "$BODY" | grep -oP '(?<=Repository Name\n---\n).*' | head -1 | xargs)
+            fi
+            PERMISSION=$(echo "$BODY" | grep -A 1 "### Permission Level" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | head -1)
+            if [ -z "$PERMISSION" ] || [[ "$PERMISSION" == "---"* ]]; then
+              PERMISSION=""
+            fi
             if [ -z "$PERMISSION" ]; then
-              PERMISSION=$(echo "$BODY" | grep -oP '(?<=### Permission Level\n---\n).*' | head -1 | xargs)
+              PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level\s*\n\s*).*' | head -1 | xargs)
+            fi
+            if [ -z "$PERMISSION" ]; then
+              PERMISSION=$(echo "$BODY" | grep -oP '(?<=Permission Level\n---\n).*' | head -1 | xargs)
             fi
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
             echo "type=repo" >> $GITHUB_OUTPUT
@@ -75,12 +106,13 @@ jobs:
           fi
           
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
- 
-      - name: Debug Output
-        run: |
-          echo "Username: ${{ steps.parse.outputs.username }}"
-          echo "Type: ${{ steps.parse.outputs.type }}"
-          echo "Target: ${{ steps.parse.outputs.target }}"
+          
+          # Debug output
+          echo "===== PARSED VALUES ====="
+          echo "Username: $USERNAME"
+          echo "Type: ${{ steps.parse.outputs.type || 'not-set' }}"
+          echo "Target: ${{ steps.parse.outputs.target || 'not-set' }}"
+          echo "========================="
  
       - name: Grant team access
         if: steps.parse.outputs.type == 'team' && steps.parse.outputs.username != '' && steps.parse.outputs.target != ''
