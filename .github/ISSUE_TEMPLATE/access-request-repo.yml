@@ -7,8 +7,8 @@ body:
     id: username
     attributes:
       label: Your GitHub Username
-      description: Enter your GitHub username (not your email, not your display name)
-      placeholder: "e.g., yourusername"
+      description: Enter your GitHub username 
+      placeholder: e.g., yourusername
     validations:
       required: true
  
@@ -16,8 +16,8 @@ body:
     id: repo
     attributes:
       label: Repository Name
-      description: The exact repository name in the format owner/repo-name (e.g., my-org/backend-api)
-      placeholder: "e.g., my-org/backend-api"
+      description: Enter the repository name in the format owner/repo-name
+      placeholder: e.g., demo-org/repo-a
     validations:
       required: true
  
@@ -25,7 +25,6 @@ body:
     id: permission
     attributes:
       label: Permission Level
-      description: Select the level of access you need for this repository
       options:
         - Read
         - Triage
@@ -38,9 +37,20 @@ body:
   - type: input
     id: duration
     attributes:
-      label: Duration (days)
-      description: How many days do you need this repository access for?
-      placeholder: "e.g., 7"
+      label: Duration
+      description: Enter the number of minutes or days you need access for
+      placeholder: e.g., 5 or 7
+    validations:
+      required: true
+ 
+  - type: dropdown
+    id: unit
+    attributes:
+      label: Time Unit
+      description: Choose whether the duration is in minutes or days
+      options:
+        - Minutes
+        - Days
     validations:
       required: true
  
@@ -48,7 +58,7 @@ body:
     id: justification
     attributes:
       label: Justification
-      description: Why do you need access to this specific repository? For what purpose?
-      placeholder: "Explain your use case..."
+      description: Why do you need access to this repository?
+      placeholder: Explain your use case...
     validations:
       required: true
