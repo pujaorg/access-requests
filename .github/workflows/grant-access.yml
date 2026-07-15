@@ -19,11 +19,20 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           APPROVERS="pujadas02"
-          if [[ ! "$APPROVERS" == *"$ACTOR"* ]]; then
-            echo "❌ Error: '$ACTOR' is not an authorized approver!"
+          IFS=',' read -r -a approver_array <<< "$APPROVERS"
+          AUTHORIZED=false
+          for approver in "${approver_array[@]}"; do
+            if [[ "$ACTOR" == "$approver" ]]; then
+              AUTHORIZED=true
+              break
+            fi
+          done
+          if [[ "$AUTHORIZED" == "false" ]]; then
+            echo "Error: '$ACTOR' is not an authorized approver!"
             exit 1
           fi
-          echo "✅ '$ACTOR' is authorized."
+          echo "'$ACTOR' is authorized."
+
  
       - name: Get issue details
         id: get_issue
@@ -31,96 +40,64 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          set -e
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
             > issue.json
-          
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.body' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
           echo "labels<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.labels[].name' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
  
       - name: Parse request details
         id: parse
         run: |
           BODY="${{ steps.get_issue.outputs.body }}"
           LABELS="${{ steps.get_issue.outputs.labels }}"
-          
           extract_value() {
-            local field="$1"
-            local body="$2"
+            local field="$1" body="$2"
             local temp="${body#*$field}"
             local value=$(echo "$temp" | grep -v '^[[:space:]]*$' | head -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ "$value" == "---"* ]] || [[ "$value" == "###"* ]]; then
-              value=""
-            fi
+            [[ "$value" == "---"* ]] || [[ "$value" == "###"* ]] && value=""
             echo "$value"
           }
-          
-          USERNAME=$(extract_value "Your GitHub Username" "$BODY")
-          if [ -z "$USERNAME" ]; then
-            USERNAME=$(extract_value "GitHub Username" "$BODY")
-          fi
-          
+          USERNAME=$(extract_value "Your GitHub Username" "$BODY") || $(extract_value "GitHub Username" "$BODY")
           DURATION=$(extract_value "Duration" "$BODY")
-          UNIT=$(extract_value "Time Unit" "$BODY")
-          if [ -z "$UNIT" ]; then
-            UNIT=$(extract_value "Unit" "$BODY")
-          fi
-          if [ -z "$UNIT" ]; then
-            UNIT="Minutes"
-          fi
-          
+          UNIT=$(extract_value "Time Unit" "$BODY" || extract_value "Unit" "$BODY" || echo "Days")
+          echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
           echo "unit=$UNIT" >> $GITHUB_OUTPUT
-          
           if [[ "$LABELS" == *"team-based"* ]]; then
-            TEAM=$(extract_value "GitHub Team Name" "$BODY")
-            if [ -z "$TEAM" ]; then
-              TEAM=$(extract_value "Team Name" "$BODY")
-            fi
+            TEAM=$(extract_value "GitHub Team Name" "$BODY") || $(extract_value "Team Name" "$BODY")
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
           elif [[ "$LABELS" == *"repo-based"* ]]; then
-            REPO=$(extract_value "Repository Name" "$BODY")
-            if [ -z "$REPO" ]; then
-              REPO=$(extract_value "Repository" "$BODY")
-            fi
-            if [[ "$REPO" != *"/"* ]]; then
-              REPO="${{ github.repository_owner }}/$REPO"
-            fi
-            PERMISSION=$(extract_value "Permission Level" "$BODY")
-            if [ -z "$PERMISSION" ]; then
-              PERMISSION=$(extract_value "Permission" "$BODY")
-            fi
+            REPO=$(extract_value "Repository Name" "$BODY") || $(extract_value "Repository" "$BODY")
+            [[ "$REPO" != *"/"* ]] && REPO="${{ github.repository_owner }}/$REPO"
+            PERMISSION=$(extract_value "Permission Level" "$BODY") || $(extract_value "Permission" "$BODY")
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
             echo "type=repo" >> $GITHUB_OUTPUT
             echo "target=$REPO" >> $GITHUB_OUTPUT
             echo "permission=$PERMISSION_LOWER" >> $GITHUB_OUTPUT
           fi
           
-          echo "username=$USERNAME" >> $GITHUB_OUTPUT
- 
       - name: Calculate expiration
         id: expiration
         run: |
           DURATION="${{ steps.parse.outputs.duration }}"
           UNIT="${{ steps.parse.outputs.unit }}"
-          
           if [ -z "$DURATION" ]; then
             DURATION=5
-          fi
-          
+          fi 
           if [ "$UNIT" == "Minutes" ]; then
             EXPIRATION=$(date -u -d "+$DURATION minutes" +"%Y-%m-%dT%H:%M:%SZ")
           else
             EXPIRATION=$(date -u -d "+$DURATION days" +"%Y-%m-%dT%H:%M:%SZ")
           fi
-          
           echo "expiration=$EXPIRATION" >> $GITHUB_OUTPUT
           echo "Expiration: $EXPIRATION"
  
@@ -134,19 +111,17 @@ jobs:
         run: |
           echo "Adding $USERNAME to team $TEAM..."
           ORG="${{ github.repository_owner }}"
-          
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/orgs/$ORG/teams/$TEAM/memberships/$USERNAME")
-          
           if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
             echo "success=true" >> $GITHUB_OUTPUT
             echo "granted_type=team" >> $GITHUB_OUTPUT
           else
             echo "success=false" >> $GITHUB_OUTPUT
-            echo "❌ Failed to add user to team. HTTP code: $RESPONSE"
+            echo "Failed to add user to team. HTTP code: $RESPONSE"
             exit 1
           fi
  
@@ -160,20 +135,18 @@ jobs:
           PERMISSION: ${{ steps.parse.outputs.permission }}
         run: |
           echo "Adding $USERNAME to $REPO with $PERMISSION access..."
-          
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/$REPO/collaborators/$USERNAME" \
             -d "{\"permission\": \"$PERMISSION\"}")
-          
           if [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
             echo "success=true" >> $GITHUB_OUTPUT
             echo "granted_type=repo" >> $GITHUB_OUTPUT
           else
             echo "success=false" >> $GITHUB_OUTPUT
-            echo "❌ Failed to grant access. HTTP code: $RESPONSE"
+            echo "Failed to grant access. HTTP code: $RESPONSE"
             exit 1
           fi
  
@@ -194,20 +167,17 @@ jobs:
         id: check_grant
         run: |
           GRANTED=false
-          
           if [ "${{ steps.grant_team.outputs.success }}" == "true" ]; then
             GRANTED=true
             GRANTED_TYPE="team"
             TARGET="${{ steps.parse.outputs.target }}"
           fi
-          
           if [ "${{ steps.grant_repo.outputs.success }}" == "true" ]; then
             GRANTED=true
             GRANTED_TYPE="repo"
             TARGET="${{ steps.parse.outputs.target }}"
             PERMISSION="${{ steps.parse.outputs.permission }}"
           fi
-          
           echo "granted=$GRANTED" >> $GITHUB_OUTPUT
           echo "granted_type=$GRANTED_TYPE" >> $GITHUB_OUTPUT
           echo "target=$TARGET" >> $GITHUB_OUTPUT
@@ -225,11 +195,10 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "$TYPE" == "team" ]; then
-            COMMENT="✅ **Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Expires:** $EXPIRATION UTC\n- **Status:** ✅ User has been added to the team."
+            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Expires:** $EXPIRATION UTC\n- **Status:**  User has been added to the team."
           else
-            COMMENT="✅ **Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:** ✅ Access has been granted."
+            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:**  Access has been granted."
           fi
-          
           curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
@@ -254,12 +223,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          COMMENT="❌ **Access Not Granted!**\n\n- **Status:** ❌ Access could not be granted. Please check the workflow logs for details."
+          COMMENT=" **Access Not Granted!**\n\n- **Status:**  Access could not be granted. Please check the workflow logs for details."
           curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
             -d "{\"body\": \"$COMMENT\"}"
+
+
+
+
+
+
+
+
 
 
 # name: Grant Access
