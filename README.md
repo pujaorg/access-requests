@@ -13,7 +13,7 @@ Users request temporary access to GitHub teams or repositories via an issue. An 
 4. **Access expires** after the user-defined duration.
 5. **Revocation workflow** removes access when expired.
  
----
+
  
 ## File Structure
  
