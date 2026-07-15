@@ -21,7 +21,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          APPROVERS="your-username-here,test-user-here"
+          APPROVERS="pujadas02"
           # Convert comma-separated list to JSON array
           ASSIGNEES=$(echo "$APPROVERS" | sed 's/,/","/g')
           ASSIGNEES="[\"$ASSIGNEES\"]"
