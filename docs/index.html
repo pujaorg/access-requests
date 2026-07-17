@@ -190,7 +190,7 @@
             <div class="form-group">
                 <label for="username">GitHub Username <span class="required">*</span></label>
                 <div style="position: relative;">
-                    <input type="text" id="username" placeholder="Select a user..." readonly />
+                    <input type="text" id="username" placeholder="Select a user..." readonly autocomplete="off" />
                     <div id="usernameDropdown" class="dropdown-list">
                         <input type="text" id="usernameSearch" placeholder="Search users..." class="dropdown-search" />
                         <div id="usernameResults"></div>
@@ -589,7 +589,6 @@ function loadFromCache() {
 // ============================================================
 // 12. Username autocomplete (from cached data)
 // ============================================================
-const usernameInput = document.getElementById('username');
 const teamInput = document.getElementById('team');
 
 // ============================================================
