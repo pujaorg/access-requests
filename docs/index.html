@@ -274,6 +274,12 @@ const message = document.getElementById('message');
 const teamFields = document.getElementById('teamFields');
 const repoFields = document.getElementById('repoFields');
 
+const teamInput = document.getElementById('team');
+const teamDropdown = document.getElementById('teamDropdown');
+const usernameInput = document.getElementById('username');
+const usernameDropdown = document.getElementById('usernameDropdown');
+const usernameSearch = document.getElementById('usernameSearch');
+const usernameResults = document.getElementById('usernameResults');
 // ============================================================
 // GitHub Configuration
 // ============================================================
@@ -589,7 +595,7 @@ function loadFromCache() {
 // ============================================================
 // 12. Username autocomplete (from cached data)
 // ============================================================
-const teamInput = document.getElementById('team');
+
 
 // ============================================================
 // Username autocomplete (custom dropdown)
@@ -659,7 +665,7 @@ document.addEventListener('click', (e) => {
 // ============================================================
 // Team autocomplete (custom dropdown)
 // ============================================================
-const teamDropdown = document.getElementById('teamDropdown');
+
  
 // Show dropdown on click (shows all)
 teamInput.addEventListener('click', function() {
@@ -728,10 +734,7 @@ loadData();
 // ============================================================
 // Username: Read-only input with searchable dropdown
 // ============================================================
-const usernameInput = document.getElementById('username');
-const usernameDropdown = document.getElementById('usernameDropdown');
-const usernameSearch = document.getElementById('usernameSearch');
-const usernameResults = document.getElementById('usernameResults');
+
  
 usernameInput.addEventListener('click', function() {
     console.log('Username field clicked'); // 👈 Debug line
