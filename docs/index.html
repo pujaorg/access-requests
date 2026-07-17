@@ -229,7 +229,13 @@ const message = document.getElementById('message');
  
 const teamFields = document.getElementById('teamFields');
 const repoFields = document.getElementById('repoFields');
- 
+
+// ============================================================
+// GitHub Configuration
+// ============================================================
+const GITHUB_ORG = 'pujaorg';
+const GITHUB_REPO = 'access-requests';
+const GITHUB_TOKEN = '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';
 // ============================================================
 // 2. Toggle fields based on access type
 // ============================================================
@@ -435,11 +441,11 @@ form.addEventListener('submit', async (e) => {
 
     try {
         const response = await fetch(
-            'https://api.github.com/repos/pujaorg/access-requests/issues',
+            'https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues',
             {
                 method: 'POST',
                 headers: {
-                    'Authorization': 'token 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',
+                    'Authorization': 'token ${GITHUB_TOKEN}',
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
@@ -486,11 +492,11 @@ async function loadData() {
         console.log('Fetching teams and members...');
  
         const [teamsRes, membersRes] = await Promise.all([
-            fetch('https://api.github.com/orgs/YOUR_ORG/teams', {
-                headers: { 'Authorization': 'token YOUR_GITHUB_TOKEN' }
+            fetch('https://api.github.com/orgs/${GITHUB_ORG}/teams', {
+                headers: { 'Authorization': 'token ${GITHUB_TOKEN}' }
             }),
-            fetch('https://api.github.com/orgs/YOUR_ORG/members', {
-                headers: { 'Authorization': 'token YOUR_GITHUB_TOKEN' }
+            fetch('https://api.github.com/orgs/${GITHUB_ORG}/members', {
+                headers: { 'Authorization': 'token ${GITHUB_TOKEN}' }
             })
         ]);
  
