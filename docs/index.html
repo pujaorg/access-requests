@@ -212,8 +212,11 @@
                 <div class="form-group">
                     <label for="team">GitHub Team Name <span class="required">*</span></label>
                     <div style="position: relative;">
-                        <input type="text" id="team" placeholder="e.g., backend-team" />
-                        <div id="teamDropdown" class="dropdown-list"></div>
+                        <input type="text" id="team" placeholder="Select a team..." readonly autocomplete="off" />
+                        <div id="teamDropdown" class="dropdown-list">
+                            <input type="text" id="teamSearch" placeholder="Search teams..." class="dropdown-search" />
+                            <div id="teamResults"></div>
+                        </div>
                     </div>
                     <div id="teamFeedback" class="feedback"></div>
                 </div>
@@ -223,14 +226,20 @@
             <div id="repoFields" class="hidden">
                 <div class="form-group">
                     <label for="repo">Repository Name <span class="required">*</span></label>
-                    <input type="text" id="repo" placeholder="e.g., owner/repo-name" />
+                    <div style="position: relative;">
+                        <input type="text" id="repo" placeholder="Select a repository..." readonly autocomplete="off" />
+                        <div id="repoDropdown" class="dropdown-list">
+                            <input type="text" id="repoSearch" placeholder="Search repositories..." class="dropdown-search" />
+                            <div id="repoResults"></div>
+                        </div>
+                    </div>
                     <div id="repoFeedback" class="feedback"></div>
                 </div>
                 <div class="form-group">
                     <label for="permission">Permission Level <span class="required">*</span></label>
                     <select id="permission">
-                        <option value="pull">Read</option>
-                        <option value="push" selected>Write</option>
+                        <option value="pull" selected>Read</option>
+                        <option value="push">Write</option>
                         <option value="admin">Admin</option>
                     </select>
                 </div>
@@ -283,10 +292,16 @@
 
     const teamInput = document.getElementById('team');
     const teamDropdown = document.getElementById('teamDropdown');
+    const teamSearch = document.getElementById('teamSearch');
+    const teamResults = document.getElementById('teamResults');
     const usernameInput = document.getElementById('username');
     const usernameDropdown = document.getElementById('usernameDropdown');
     const usernameSearch = document.getElementById('usernameSearch');
     const usernameResults = document.getElementById('usernameResults');
+    const repoInput = document.getElementById('repo');
+    const repoDropdown = document.getElementById('repoDropdown');
+    const repoSearch = document.getElementById('repoSearch');
+    const repoResults = document.getElementById('repoResults');
 
     // ============================================================
     // GitHub Configuration
@@ -386,7 +401,7 @@
         if (accessType.value === 'team') {
             const val = team.value.trim();
             if (!val) {
-                teamFeedback.textContent = '❌ Please enter a team name.';
+                teamFeedback.textContent = '❌ Please select a team.';
                 teamFeedback.className = 'feedback error';
                 return false;
             }
@@ -414,18 +429,20 @@
         if (accessType.value === 'repo') {
             const val = repo.value.trim();
             if (!val) {
-                repoFeedback.textContent = '❌ Please enter a repository name.';
+                repoFeedback.textContent = '❌ Please select a repository.';
                 repoFeedback.className = 'feedback error';
                 return false;
             }
-            if (!val.includes('/')) {
-                repoFeedback.textContent = '❌ Use format: owner/repo-name';
+            const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
+            if (exists) {
+                repoFeedback.textContent = '✅ Valid repository in organization.';
+                repoFeedback.className = 'feedback success';
+                return true;
+            } else {
+                repoFeedback.textContent = '❌ Repository not found in your organization.';
                 repoFeedback.className = 'feedback error';
                 return false;
             }
-            repoFeedback.textContent = '';
-            repoFeedback.className = 'feedback';
-            return true;
         }
         return true;
     }
@@ -562,11 +579,12 @@
     // ============================================================
     let allTeams = [];
     let allMembers = [];
+    let allRepos = [];
 
     async function loadData() {
         try {
-            console.log('Fetching teams and members...');
-            const [teamsRes, membersRes] = await Promise.all([
+            console.log('Fetching teams, members, and repos...');
+            const [teamsRes, membersRes, reposRes] = await Promise.all([
                 fetch(`https://api.github.com/orgs/${GITHUB_ORG}/teams`, {
                     headers: {
                         'Authorization': `token ${GITHUB_TOKEN}`,
@@ -578,18 +596,28 @@
                         'Authorization': `token ${GITHUB_TOKEN}`,
                         'Accept': 'application/vnd.github.v3+json'
                     }
+                }),
+                fetch(`https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100`, {
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
                 })
             ]);
             console.log('Teams response status:', teamsRes.status);
             console.log('Members response status:', membersRes.status);
+            console.log('Repos response status:', reposRes.status);
 
-            if (teamsRes.ok && membersRes.ok) {
+            if (teamsRes.ok && membersRes.ok && reposRes.ok) {
                 allTeams = await teamsRes.json();
                 allMembers = await membersRes.json();
+                allRepos = await reposRes.json();
                 localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
                 localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+                localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
                 console.log('Teams loaded:', allTeams.length);
                 console.log('Members loaded:', allMembers.length);
+                console.log('Repos loaded:', allRepos.length);
             } else {
                 console.warn('API call failed — using cache');
                 loadFromCache();
@@ -603,32 +631,32 @@
     function loadFromCache() {
         const cachedTeams = localStorage.getItem('cachedTeams');
         const cachedMembers = localStorage.getItem('cachedMembers');
+        const cachedRepos = localStorage.getItem('cachedRepos');
         if (cachedTeams) allTeams = JSON.parse(cachedTeams);
         if (cachedMembers) allMembers = JSON.parse(cachedMembers);
+        if (cachedRepos) allRepos = JSON.parse(cachedRepos);
     }
 
     // ============================================================
-    // 12. Team autocomplete (UNCHANGED — plain list only, no search
-    // box, exactly as it was in the original. Left untouched per
-    // request. Revisit once username flow is confirmed working.)
+    // 12. Team: Read-only input with searchable dropdown
+    // (Now matches the username pattern exactly.)
     // ============================================================
     teamInput.addEventListener('click', function() {
-        showTeamDropdown(this.value.trim());
+        teamDropdown.style.display = 'block';
+        teamSearch.value = '';
+        teamSearch.focus();
+        filterTeamResults('');
     });
 
-    teamInput.addEventListener('input', function() {
-        showTeamDropdown(this.value.trim());
+    teamSearch.addEventListener('input', function() {
+        filterTeamResults(this.value.trim().toLowerCase());
     });
 
-    function showTeamDropdown(query) {
-        const dropdown = document.getElementById('teamDropdown');
-        dropdown.innerHTML = '';
-        dropdown.style.display = 'none';
-
-        if (allTeams.length === 0) return;
+    function filterTeamResults(query) {
+        teamResults.innerHTML = '';
 
         const matches = allTeams
-            .filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
+            .filter(t => t.name.toLowerCase().includes(query))
             .slice(0, 8);
 
         if (matches.length === 0) {
@@ -637,8 +665,7 @@
             item.textContent = 'No matching teams found';
             item.style.color = '#888';
             item.style.cursor = 'default';
-            dropdown.appendChild(item);
-            dropdown.style.display = 'block';
+            teamResults.appendChild(item);
             return;
         }
 
@@ -648,13 +675,10 @@
             item.textContent = t.name;
             item.addEventListener('click', () => {
                 teamInput.value = t.name;
-                dropdown.style.display = 'none';
-                teamInput.focus();
+                teamDropdown.style.display = 'none';
             });
-            dropdown.appendChild(item);
+            teamResults.appendChild(item);
         });
-
-        dropdown.style.display = 'block';
     }
 
     document.addEventListener('click', (e) => {
@@ -667,6 +691,58 @@
     // 13. Load data when page loads
     // ============================================================
     loadData();
+
+    // ============================================================
+    // 14. Repository: Read-only input with searchable dropdown
+    // Same pattern as username/team. Uses full_name (owner/repo)
+    // since GitHub repo names alone aren't unique across an org's
+    // visible list once forks/mirrors are involved.
+    // ============================================================
+    repoInput.addEventListener('click', function() {
+        repoDropdown.style.display = 'block';
+        repoSearch.value = '';
+        repoSearch.focus();
+        filterRepoResults('');
+    });
+
+    repoSearch.addEventListener('input', function() {
+        filterRepoResults(this.value.trim().toLowerCase());
+    });
+
+    function filterRepoResults(query) {
+        repoResults.innerHTML = '';
+
+        const matches = allRepos
+            .filter(r => r.full_name.toLowerCase().includes(query))
+            .slice(0, 8);
+
+        if (matches.length === 0) {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'No matching repositories found';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            repoResults.appendChild(item);
+            return;
+        }
+
+        matches.forEach(r => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = r.full_name;
+            item.addEventListener('click', () => {
+                repoInput.value = r.full_name;
+                repoDropdown.style.display = 'none';
+            });
+            repoResults.appendChild(item);
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!repoInput.contains(e.target) && !repoDropdown.contains(e.target)) {
+            repoDropdown.style.display = 'none';
+        }
+    });
 
     // ============================================================
     // 14. Username: Read-only input with searchable dropdown
@@ -723,12 +799,6 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
 
 
 
