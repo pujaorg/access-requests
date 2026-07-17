@@ -490,16 +490,20 @@ let allMembers = [];
 async function loadData() {
     try {
         console.log('Fetching teams and members...');
- 
         const [teamsRes, membersRes] = await Promise.all([
-            fetch('https://api.github.com/orgs/${GITHUB_ORG}/teams', {
-                headers: { 'Authorization': 'token ${GITHUB_TOKEN}' }
+            fetch(`https://api.github.com/orgs/${GITHUB_ORG}/teams`, {
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
             }),
-            fetch('https://api.github.com/orgs/${GITHUB_ORG}/members', {
-                headers: { 'Authorization': 'token ${GITHUB_TOKEN}' }
+            fetch(`https://api.github.com/orgs/${GITHUB_ORG}/members`, {
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
             })
         ]);
- 
         console.log('Teams response status:', teamsRes.status);
         console.log('Members response status:', membersRes.status);
  
