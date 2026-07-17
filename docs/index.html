@@ -740,9 +740,15 @@ loadData();
 
  
 
-document.getElementById('usernameInput').addEventListener('click', function() {
-    document.getElementById('usernameDropdown').style.display = 'block';
-});
+const testInput = document.getElementById('username');
+if (testInput) {
+    testInput.addEventListener('click', function() {
+        document.getElementById('usernameDropdown').style.display = 'block';
+    });
+    console.log('Click event attached to username');
+} else {
+    console.log('username element not found!');
+}
  
 </script>
 </body>
