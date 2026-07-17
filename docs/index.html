@@ -399,164 +399,164 @@ function buildIssueBody() {
     body += `### Justification\n${justificationVal}`;
     return body;
 }
- 
-        // ============================================================
-        // 9. Submit handler
-        // ============================================================
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            message.style.display = 'none';
-            message.className = 'message';
- 
-            const isUsernameValid = await validateUsername(username.value);
-            const isJustificationValid = validateJustification();
-            const isTeamValid = validateTeam();
-            const isRepoValid = validateRepo();
-            const isDurationValid = validateDuration();
- 
-            if (!isUsernameValid || !isJustificationValid || !isTeamValid || !isRepoValid || !isDurationValid) {
-                message.textContent = '❌ Please fix the errors above.';
-                message.className = 'message error';
-                message.style.display = 'block';
-                return;
+// ============================================================
+// 9. Submit handler
+// ============================================================
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    message.style.display = 'none';
+    message.className = 'message';
+
+    const isUsernameValid = await validateUsername(username.value);
+    const isJustificationValid = validateJustification();
+    const isTeamValid = validateTeam();
+    const isRepoValid = validateRepo();
+    const isDurationValid = validateDuration();
+
+    if (!isUsernameValid || !isJustificationValid || !isTeamValid || !isRepoValid || !isDurationValid) {
+        message.textContent = '❌ Please fix the errors above.';
+        message.className = 'message error';
+        message.style.display = 'block';
+        return;
+    }
+
+    const issueBody = buildIssueBody();
+    const isTeam = accessType.value === 'team';
+    const title = isTeam
+        ? `[Team Request]: ${username.value.trim()} → ${team.value.trim()}`
+        : `[Repo Request]: ${username.value.trim()} → ${repo.value.trim()}`;
+
+    const payload = {
+        title: title,
+        body: issueBody,
+        labels: ['access-request', isTeam ? 'team-based' : 'repo-based']
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    try {
+        const response = await fetch(
+            'https://api.github.com/repos/pujaorg/access-requests/issues',
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'token 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',
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             }
- 
-            const issueBody = buildIssueBody();
-            const isTeam = accessType.value === 'team';
-            const title = isTeam
-                ? `[Team Request]: ${username.value.trim()} → ${team.value.trim()}`
-                : `[Repo Request]: ${username.value.trim()} → ${repo.value.trim()}`;
- 
-            const payload = {
-                title: title,
-                body: issueBody,
-                labels: ['access-request', isTeam ? 'team-based' : 'repo-based']
-            };
- 
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Submitting...';
- 
-            try {
-                const response = await fetch(
-                    'https://api.github.com/repos/YOUR_ORG/YOUR_REPO/issues',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'token YOUR_GITHUB_TOKEN',
-                            'Accept': 'application/vnd.github.v3+json',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
-                    }
-                );
- 
-                if (response.ok) {
-                    message.textContent = '✅ Request submitted successfully! You will be notified once approved.';
-                    message.className = 'message success';
-                    message.style.display = 'block';
-                    form.reset();
-                    charCount.textContent = '0';
-                    accessType.dispatchEvent(new Event('change'));
-                } else {
-                    const error = await response.json();
-                    message.textContent = `❌ Failed to submit: ${error.message || 'Unknown error'}`;
-                    message.className = 'message error';
-                    message.style.display = 'block';
-                }
-            } catch (err) {
-                message.textContent = `❌ Error: ${err.message}`;
-                message.className = 'message error';
-                message.style.display = 'block';
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Submit Request';
-            }
-        });
- 
-        // ============================================================
-        // 10. Initial state
-        // ============================================================
-        accessType.dispatchEvent(new Event('change'));
-        // ============================================================
-        // Load teams and members (2 API calls per session)
-        // ============================================================
-        let allTeams = [];
-        let allMembers = [];
-         
-        async function loadData() {
-            try {
-                const [teamsRes, membersRes] = await Promise.all([
-                    fetch('https://api.github.com/orgs/pujaorg/teams', {
-                        headers: { 'Authorization': 'token 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' }
-                    }),
-                    fetch('https://api.github.com/orgs/pujaorg/members', {
-                        headers: { 'Authorization': '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' }
-                    })
-                ]);
-         
-                if (teamsRes.ok && membersRes.ok) {
-                    allTeams = await teamsRes.json();
-                    allMembers = await membersRes.json();
-                    localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
-                    localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
-                } else {
-                    loadFromCache();
-                }
-            } catch {
-                loadFromCache();
-            }
+        );
+
+        if (response.ok) {
+            message.textContent = '✅ Request submitted successfully! You will be notified once approved.';
+            message.className = 'message success';
+            message.style.display = 'block';
+            form.reset();
+            charCount.textContent = '0';
+            accessType.dispatchEvent(new Event('change'));
+        } else {
+            const error = await response.json();
+            message.textContent = `❌ Failed to submit: ${error.message || 'Unknown error'}`;
+            message.className = 'message error';
+            message.style.display = 'block';
         }
-         
-        function loadFromCache() {
-            const cachedTeams = localStorage.getItem('cachedTeams');
-            const cachedMembers = localStorage.getItem('cachedMembers');
-            if (cachedTeams) allTeams = JSON.parse(cachedTeams);
-            if (cachedMembers) allMembers = JSON.parse(cachedMembers);
+    } catch (err) {
+        message.textContent = `❌ Error: ${err.message}`;
+        message.className = 'message error';
+        message.style.display = 'block';
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Request';
+    }
+});
+
+// ============================================================
+// 10. Initial state
+// ============================================================
+accessType.dispatchEvent(new Event('change'));
+
+// ============================================================
+// 11. Load teams and members (2 API calls per session)
+// ============================================================
+let allTeams = [];
+let allMembers = [];
+
+async function loadData() {
+    try {
+        const [teamsRes, membersRes] = await Promise.all([
+            fetch('https://api.github.com/orgs/pujaorg/teams', {
+                headers: { 'Authorization': 'token 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' }
+            }),
+            fetch('https://api.github.com/orgs/pujaorg/members', {
+                headers: { 'Authorization': 'token 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' }
+            })
+        ]);
+
+        if (teamsRes.ok && membersRes.ok) {
+            allTeams = await teamsRes.json();
+            allMembers = await membersRes.json();
+            localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
+            localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+        } else {
+            loadFromCache();
         }
-         
-        // ============================================================
-        // Username autocomplete (from cached data)
-        // ============================================================
-        const usernameInput = document.getElementById('username');
-        const teamInput = document.getElementById('team');
-         
-        usernameInput.addEventListener('input', function() {
-            const query = this.value.trim().toLowerCase();
-            const datalist = document.getElementById('usernameSuggestions');
-            datalist.innerHTML = '';
-            if (query.length < 2) return;
-            const matches = allMembers
-                .filter(m => m.login.toLowerCase().includes(query))
-                .slice(0, 5);
-            matches.forEach(m => {
-                const option = document.createElement('option');
-                option.value = m.login;
-                datalist.appendChild(option);
-            });
-        });
-         
-        // ============================================================
-        // Team autocomplete (from cached data)
-        // ============================================================
-        teamInput.addEventListener('input', function() {
-            const query = this.value.trim().toLowerCase();
-            const datalist = document.getElementById('teamSuggestions');
-            datalist.innerHTML = '';
-            if (query.length < 2) return;
-            const matches = allTeams
-                .filter(t => t.name.toLowerCase().includes(query))
-                .slice(0, 5);
-            matches.forEach(t => {
-                const option = document.createElement('option');
-                option.value = t.name;
-                datalist.appendChild(option);
-            });
-        });
-         
-        // ============================================================
-        // Load data when page loads
-        // ============================================================
-        loadData();
-    </script>
+    } catch {
+        loadFromCache();
+    }
+}
+
+function loadFromCache() {
+    const cachedTeams = localStorage.getItem('cachedTeams');
+    const cachedMembers = localStorage.getItem('cachedMembers');
+    if (cachedTeams) allTeams = JSON.parse(cachedTeams);
+    if (cachedMembers) allMembers = JSON.parse(cachedMembers);
+}
+
+// ============================================================
+// 12. Username autocomplete (from cached data)
+// ============================================================
+const usernameInput = document.getElementById('username');
+const teamInput = document.getElementById('team');
+
+usernameInput.addEventListener('input', function() {
+    const query = this.value.trim().toLowerCase();
+    const datalist = document.getElementById('usernameSuggestions');
+    datalist.innerHTML = '';
+    if (query.length < 2) return;
+    const matches = allMembers
+        .filter(m => m.login.toLowerCase().includes(query))
+        .slice(0, 5);
+    matches.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.login;
+        datalist.appendChild(option);
+    });
+});
+
+// ============================================================
+// 13. Team autocomplete (from cached data)
+// ============================================================
+teamInput.addEventListener('input', function() {
+    const query = this.value.trim().toLowerCase();
+    const datalist = document.getElementById('teamSuggestions');
+    datalist.innerHTML = '';
+    if (query.length < 2) return;
+    const matches = allTeams
+        .filter(t => t.name.toLowerCase().includes(query))
+        .slice(0, 5);
+    matches.forEach(t => {
+        const option = document.createElement('option');
+        option.value = t.name;
+        datalist.appendChild(option);
+    });
+});
+
+// ============================================================
+// 14. Load data when page loads
+// ============================================================
+loadData();
+</script>
 </body>
 </html>
