@@ -257,7 +257,8 @@
         <div id="message" class="message"></div>
     </div>
  
-    <script>
+<script>
+    console.log('Script started');
 // ============================================================
 // 1. DOM refs
 // ============================================================
@@ -740,16 +741,8 @@ loadData();
 
  
 
-const testInput = document.getElementById('username');
-if (testInput) {
-    testInput.addEventListener('click', function() {
-        document.getElementById('usernameDropdown').style.display = 'block';
-    });
-    console.log('Click event attached to username');
-} else {
-    console.log('username element not found!');
-}
- 
+
+    console.log('Script ended');
 </script>
 </body>
 </html>
