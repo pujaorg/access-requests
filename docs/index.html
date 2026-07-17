@@ -582,18 +582,38 @@ const teamInput = document.getElementById('team');
 // ============================================================
 const usernameDropdown = document.getElementById('usernameDropdown');
  
-usernameInput.addEventListener('input', function() {
-    const query = this.value.trim().toLowerCase();
-    usernameDropdown.innerHTML = '';
-    usernameDropdown.style.display = 'none';
+// Show dropdown on click (shows all)
+usernameInput.addEventListener('click', function() {
+    showUsernameDropdown(this.value.trim());
+});
  
-    if (query.length < 2 || allMembers.length === 0) return;
+// Filter on type
+usernameInput.addEventListener('input', function() {
+    showUsernameDropdown(this.value.trim());
+});
+ 
+function showUsernameDropdown(query) {
+    const dropdown = document.getElementById('usernameDropdown');
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'none';
+ 
+    if (allMembers.length === 0) return;
  
     const matches = allMembers
-        .filter(m => m.login.toLowerCase().includes(query))
+        .filter(m => m.login.toLowerCase().includes(query.toLowerCase()))
         .slice(0, 8);
  
-    if (matches.length === 0) return;
+    if (matches.length === 0) {
+        // Show "No results found" option
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = 'No matching users found';
+        item.style.color = '#888';
+        item.style.cursor = 'default';
+        dropdown.appendChild(item);
+        dropdown.style.display = 'block';
+        return;
+    }
  
     matches.forEach(m => {
         const item = document.createElement('div');
@@ -601,14 +621,15 @@ usernameInput.addEventListener('input', function() {
         item.textContent = m.login;
         item.addEventListener('click', () => {
             usernameInput.value = m.login;
-            usernameDropdown.style.display = 'none';
+            dropdown.style.display = 'none';
             usernameInput.focus();
         });
-        usernameDropdown.appendChild(item);
+        dropdown.appendChild(item);
     });
  
-    usernameDropdown.style.display = 'block';
-});
+    dropdown.style.display = 'block';
+}
+ 
  
 // Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
@@ -627,18 +648,37 @@ document.addEventListener('click', (e) => {
 // ============================================================
 const teamDropdown = document.getElementById('teamDropdown');
  
-teamInput.addEventListener('input', function() {
-    const query = this.value.trim().toLowerCase();
-    teamDropdown.innerHTML = '';
-    teamDropdown.style.display = 'none';
+// Show dropdown on click (shows all)
+teamInput.addEventListener('click', function() {
+    showTeamDropdown(this.value.trim());
+});
  
-    if (query.length < 2 || allTeams.length === 0) return;
+// Filter on type
+teamInput.addEventListener('input', function() {
+    showTeamDropdown(this.value.trim());
+});
+ 
+function showTeamDropdown(query) {
+    const dropdown = document.getElementById('teamDropdown');
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'none';
+ 
+    if (allTeams.length === 0) return;
  
     const matches = allTeams
-        .filter(t => t.name.toLowerCase().includes(query))
+        .filter(t => t.name.toLowerCase().includes(query.toLowerCase()))
         .slice(0, 8);
  
-    if (matches.length === 0) return;
+    if (matches.length === 0) {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = 'No matching teams found';
+        item.style.color = '#888';
+        item.style.cursor = 'default';
+        dropdown.appendChild(item);
+        dropdown.style.display = 'block';
+        return;
+    }
  
     matches.forEach(t => {
         const item = document.createElement('div');
@@ -646,14 +686,15 @@ teamInput.addEventListener('input', function() {
         item.textContent = t.name;
         item.addEventListener('click', () => {
             teamInput.value = t.name;
-            teamDropdown.style.display = 'none';
+            dropdown.style.display = 'none';
             teamInput.focus();
         });
-        teamDropdown.appendChild(item);
+        dropdown.appendChild(item);
     });
  
-    teamDropdown.style.display = 'block';
-});
+    dropdown.style.display = 'block';
+}
+ 
 
 
  
