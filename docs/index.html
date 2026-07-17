@@ -433,7 +433,7 @@
                 repoFeedback.className = 'feedback error';
                 return false;
             }
-            const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
+            const exists = allRepos.some(r => r.name.toLowerCase() === val.toLowerCase());
             if (exists) {
                 repoFeedback.textContent = '✅ Valid repository in organization.';
                 repoFeedback.className = 'feedback success';
@@ -713,7 +713,7 @@
         repoResults.innerHTML = '';
 
         const matches = allRepos
-            .filter(r => r.full_name.toLowerCase().includes(query))
+            .filter(r => r.name.toLowerCase().includes(query))
             .slice(0, 8);
 
         if (matches.length === 0) {
@@ -729,9 +729,9 @@
         matches.forEach(r => {
             const item = document.createElement('div');
             item.className = 'dropdown-item';
-            item.textContent = r.full_name;
+            item.textContent = r.name;
             item.addEventListener('click', () => {
-                repoInput.value = r.full_name;
+                repoInput.value = r.name;
                 repoDropdown.style.display = 'none';
             });
             repoResults.appendChild(item);
