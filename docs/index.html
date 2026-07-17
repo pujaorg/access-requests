@@ -251,27 +251,25 @@ async function validateUsername(usernameValue) {
         usernameFeedback.className = 'feedback error';
         return false;
     }
-    try {
-        const res = await fetch(`https://api.github.com/users/${usernameValue.trim()}`);
-        if (res.status === 200) {
-            usernameFeedback.textContent = '✅ Valid GitHub user.';
-            usernameFeedback.className = 'feedback success';
-            return true;
-        } else if (res.status === 404) {
-            usernameFeedback.textContent = '❌ No such GitHub user exists.';
-            usernameFeedback.className = 'feedback error';
-            return false;
-        } else {
-            usernameFeedback.textContent = '⚠️ Unable to verify. Please try again.';
-            usernameFeedback.className = 'feedback error';
-            return false;
-        }
-    } catch {
-        usernameFeedback.textContent = '⚠️ Network error. Please check your connection.';
+ 
+    // Wait for data to load if not already loaded
+    if (allMembers.length === 0) {
+        await loadData();
+    }
+ 
+    const exists = allMembers.some(m => m.login.toLowerCase() === usernameValue.trim().toLowerCase());
+    
+    if (exists) {
+        usernameFeedback.textContent = '✅ Valid organization member.';
+        usernameFeedback.className = 'feedback success';
+        return true;
+    } else {
+        usernameFeedback.textContent = '❌ User not found in your organization.';
         usernameFeedback.className = 'feedback error';
         return false;
     }
 }
+ 
  
 // ============================================================
 // 4. Justification validation (live + on submit)
