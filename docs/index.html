@@ -163,8 +163,8 @@
     <div class="container">
         <h1>🔐 GitHub Access Request</h1>
         <p class="subtitle">Request access to a GitHub team or repository</p>
- 
-        <form id="accessForm">
+        
+        <form id="accessForm" onsubmit="return false;">
             <!-- Access Type -->
             <div class="form-group">
                 <label for="accessType">Access Type <span class="required">*</span></label>
@@ -617,23 +617,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Live validation for username (updates as you type)
-usernameInput.addEventListener('input', function() {
-    const val = this.value.trim();
-    if (val.length === 0) {
-        usernameFeedback.textContent = '';
-        usernameFeedback.className = 'feedback';
-    } else {
-        const exists = allMembers.some(m => m.login.toLowerCase() === val.toLowerCase());
-        if (exists) {
-            usernameFeedback.textContent = '✅ Valid organization member.';
-            usernameFeedback.className = 'feedback success';
-        } else {
-            usernameFeedback.textContent = '❌ User not found in your organization.';
-            usernameFeedback.className = 'feedback error';
-        }
-    }
-});
  
         
 // ============================================================
@@ -672,23 +655,7 @@ teamInput.addEventListener('input', function() {
     teamDropdown.style.display = 'block';
 });
 
-// Live validation for team (updates as you type)
-teamInput.addEventListener('input', function() {
-    const val = this.value.trim();
-    if (val.length === 0) {
-        teamFeedback.textContent = '';
-        teamFeedback.className = 'feedback';
-    } else {
-        const exists = allTeams.some(t => t.name.toLowerCase() === val.toLowerCase());
-        if (exists) {
-            teamFeedback.textContent = '✅ Valid team in organization.';
-            teamFeedback.className = 'feedback success';
-        } else {
-            teamFeedback.textContent = '❌ Team not found in your organization.';
-            teamFeedback.className = 'feedback error';
-        }
-    }
-});
+
  
  
 // Close dropdown when clicking outside
