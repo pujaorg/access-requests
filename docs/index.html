@@ -164,7 +164,7 @@
         <h1>🔐 GitHub Access Request</h1>
         <p class="subtitle">Request access to a GitHub team or repository</p>
         
-        <form id="accessForm" onsubmit="return false;">
+        <form id="accessForm">
             <!-- Access Type -->
             <div class="form-group">
                 <label for="accessType">Access Type <span class="required">*</span></label>
@@ -446,7 +446,7 @@ function buildIssueBody() {
 // ============================================================
 // 9. Submit handler
 // ============================================================
-form.addEventListener('submit', async (e) => {
+document.getElementById('submitBtn').addEventListener('click', async function(e) {
     e.preventDefault();
     message.style.display = 'none';
     message.className = 'message';
