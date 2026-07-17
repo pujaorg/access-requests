@@ -740,7 +740,22 @@ document.addEventListener('click', (e) => {
 loadData();
 
  
-
+// ============================================================
+// Debug: Check username element and click
+// ============================================================
+    const testInput = document.getElementById('username');
+    console.log('username element:', testInput);
+     
+    if (testInput) {
+        testInput.addEventListener('click', function() {
+            console.log('Username clicked!');
+            const dropdown = document.getElementById('usernameDropdown');
+            console.log('dropdown element:', dropdown);
+            if (dropdown) {
+                dropdown.style.display = 'block';
+            }
+        });
+    }
 
     console.log('Script ended');
 </script>
