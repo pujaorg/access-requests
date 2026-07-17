@@ -361,12 +361,23 @@ function validateTeam() {
             teamFeedback.className = 'feedback error';
             return false;
         }
-        teamFeedback.textContent = '';
-        teamFeedback.className = 'feedback';
-        return true;
+ 
+        // Check if the team exists in the organization teams list
+        const exists = allTeams.some(t => t.name.toLowerCase() === val.toLowerCase());
+        
+        if (exists) {
+            teamFeedback.textContent = '✅ Valid team in organization.';
+            teamFeedback.className = 'feedback success';
+            return true;
+        } else {
+            teamFeedback.textContent = '❌ Team not found in your organization.';
+            teamFeedback.className = 'feedback error';
+            return false;
+        }
     }
     return true;
 }
+ 
  
 // ============================================================
 // 6. Repo validation
