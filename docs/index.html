@@ -157,6 +157,18 @@
             background: #0969da;
             color: #ffffff;
         }
+        .dropdown-search {
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-bottom: 1px solid #d0d7de;
+            outline: none;
+            font-size: 14px;
+        }
+        .dropdown-search:focus {
+            border-bottom-color: #0969da;
+        }
+ 
     </style>
 </head>
 <body>
@@ -178,12 +190,15 @@
             <div class="form-group">
                 <label for="username">GitHub Username <span class="required">*</span></label>
                 <div style="position: relative;">
-                    <input type="text" id="username" placeholder="e.g., yourusername" required />
-                    <div id="usernameDropdown" class="dropdown-list"></div>
+                    <input type="text" id="username" placeholder="Select a user..." readonly />
+                    <div id="usernameDropdown" class="dropdown-list">
+                        <input type="text" id="usernameSearch" placeholder="Search users..." class="dropdown-search" />
+                        <div id="usernameResults"></div>
+                    </div>
                 </div>
                 <div id="usernameFeedback" class="feedback"></div>
             </div>
-             
+            
             <!-- Team Fields (default visible) -->
             <div id="teamFields">
                 <div class="form-group">
@@ -711,6 +726,64 @@ document.addEventListener('click', (e) => {
 // 14. Load data when page loads
 // ============================================================
 loadData();
+
+// ============================================================
+// Username: Read-only input with searchable dropdown
+// ============================================================
+const usernameInput = document.getElementById('username');
+const usernameDropdown = document.getElementById('usernameDropdown');
+const usernameSearch = document.getElementById('usernameSearch');
+const usernameResults = document.getElementById('usernameResults');
+ 
+// Click on input → show dropdown
+usernameInput.addEventListener('click', function() {
+    usernameDropdown.style.display = 'block';
+    usernameSearch.value = '';
+    usernameSearch.focus();
+    filterUsernameResults('');
+});
+ 
+// Type in search box → filter results
+usernameSearch.addEventListener('input', function() {
+    filterUsernameResults(this.value.trim().toLowerCase());
+});
+ 
+function filterUsernameResults(query) {
+    usernameResults.innerHTML = '';
+ 
+    const matches = allMembers
+        .filter(m => m.login.toLowerCase().includes(query))
+        .slice(0, 8);
+ 
+    if (matches.length === 0) {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = 'No matching users found';
+        item.style.color = '#888';
+        item.style.cursor = 'default';
+        usernameResults.appendChild(item);
+        return;
+    }
+ 
+    matches.forEach(m => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = m.login;
+        item.addEventListener('click', () => {
+            usernameInput.value = m.login;
+            usernameDropdown.style.display = 'none';
+        });
+        usernameResults.appendChild(item);
+    });
+}
+ 
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!usernameInput.contains(e.target) && !usernameDropdown.contains(e.target)) {
+        usernameDropdown.style.display = 'none';
+    }
+});
+ 
 </script>
 </body>
 </html>
