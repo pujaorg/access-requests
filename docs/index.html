@@ -735,13 +735,14 @@ const usernameDropdown = document.getElementById('usernameDropdown');
 const usernameSearch = document.getElementById('usernameSearch');
 const usernameResults = document.getElementById('usernameResults');
  
-// Click on input → show dropdown
 usernameInput.addEventListener('click', function() {
+    console.log('Username field clicked'); // 👈 Debug line
     usernameDropdown.style.display = 'block';
     usernameSearch.value = '';
     usernameSearch.focus();
     filterUsernameResults('');
 });
+ 
  
 // Type in search box → filter results
 usernameSearch.addEventListener('input', function() {
