@@ -740,7 +740,9 @@ loadData();
 
  
 
-document.getElementById('usernameDropdown').style.display = 'block';
+document.getElementById('usernameInput').addEventListener('click', function() {
+    document.getElementById('usernameDropdown').style.display = 'block';
+});
  
 </script>
 </body>
