@@ -483,24 +483,33 @@ let allMembers = [];
 
 async function loadData() {
     try {
+        console.log('Fetching teams and members...');
+ 
         const [teamsRes, membersRes] = await Promise.all([
-            fetch('https://api.github.com/orgs/pujaorg/teams', {
-                headers: { 'Authorization': 'token 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' }
+            fetch('https://api.github.com/orgs/YOUR_ORG/teams', {
+                headers: { 'Authorization': 'token YOUR_GITHUB_TOKEN' }
             }),
-            fetch('https://api.github.com/orgs/pujaorg/members', {
-                headers: { 'Authorization': 'token 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' }
+            fetch('https://api.github.com/orgs/YOUR_ORG/members', {
+                headers: { 'Authorization': 'token YOUR_GITHUB_TOKEN' }
             })
         ]);
-
+ 
+        console.log('Teams response status:', teamsRes.status);
+        console.log('Members response status:', membersRes.status);
+ 
         if (teamsRes.ok && membersRes.ok) {
             allTeams = await teamsRes.json();
             allMembers = await membersRes.json();
             localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
             localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+            console.log('Teams loaded:', allTeams.length);
+            console.log('Members loaded:', allMembers.length);
         } else {
+            console.warn('API call failed — using cache');
             loadFromCache();
         }
-    } catch {
+    } catch (error) {
+        console.error('Error loading data:', error);
         loadFromCache();
     }
 }
