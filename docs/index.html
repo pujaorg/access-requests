@@ -133,6 +133,30 @@
             border-top: 1px solid #d0d7de;
             margin: 20px 0;
         }
+        .dropdown-list {
+            position: absolute;
+            background: #ffffff;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 100%;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+        .dropdown-list .dropdown-item {
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .dropdown-list .dropdown-item:hover {
+            background: #f0f6fc;
+        }
+        .dropdown-list .dropdown-item.active {
+            background: #0969da;
+            color: #ffffff;
+        }
     </style>
 </head>
 <body>
@@ -153,20 +177,25 @@
             <!-- Username -->
             <div class="form-group">
                 <label for="username">GitHub Username <span class="required">*</span></label>
-                <input type="text" id="username" list="usernameSuggestions" placeholder="e.g., yourusername" required />
-                <datalist id="usernameSuggestions"></datalist>
+                <div style="position: relative;">
+                    <input type="text" id="username" placeholder="e.g., yourusername" required />
+                    <div id="usernameDropdown" class="dropdown-list"></div>
+                </div>
                 <div id="usernameFeedback" class="feedback"></div>
             </div>
- 
+             
             <!-- Team Fields (default visible) -->
             <div id="teamFields">
                 <div class="form-group">
                     <label for="team">GitHub Team Name <span class="required">*</span></label>
-                    <input type="text" id="team" list="teamSuggestions" placeholder="e.g., backend-team" />
-                    <datalist id="teamSuggestions"></datalist>
+                    <div style="position: relative;">
+                        <input type="text" id="team" placeholder="e.g., backend-team" />
+                        <div id="teamDropdown" class="dropdown-list"></div>
+                    </div>
                     <div id="teamFeedback" class="feedback"></div>
                 </div>
             </div>
+ 
  
             <!-- Repo Fields (hidden by default) -->
             <div id="repoFields" class="hidden">
@@ -537,38 +566,90 @@ function loadFromCache() {
 const usernameInput = document.getElementById('username');
 const teamInput = document.getElementById('team');
 
+// ============================================================
+// Username autocomplete (custom dropdown)
+// ============================================================
+const usernameDropdown = document.getElementById('usernameDropdown');
+ 
 usernameInput.addEventListener('input', function() {
     const query = this.value.trim().toLowerCase();
-    const datalist = document.getElementById('usernameSuggestions');
-    datalist.innerHTML = '';
-    if (query.length < 2) return;
+    usernameDropdown.innerHTML = '';
+    usernameDropdown.style.display = 'none';
+ 
+    if (query.length < 2 || allMembers.length === 0) return;
+ 
     const matches = allMembers
         .filter(m => m.login.toLowerCase().includes(query))
-        .slice(0, 5);
+        .slice(0, 8);
+ 
+    if (matches.length === 0) return;
+ 
     matches.forEach(m => {
-        const option = document.createElement('option');
-        option.value = m.login;
-        datalist.appendChild(option);
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = m.login;
+        item.addEventListener('click', () => {
+            usernameInput.value = m.login;
+            usernameDropdown.style.display = 'none';
+            usernameInput.focus();
+        });
+        usernameDropdown.appendChild(item);
     });
+ 
+    usernameDropdown.style.display = 'block';
 });
-
+ 
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!usernameInput.contains(e.target) && !usernameDropdown.contains(e.target)) {
+        usernameDropdown.style.display = 'none';
+    }
+});
+ 
+        
 // ============================================================
 // 13. Team autocomplete (from cached data)
 // ============================================================
+// ============================================================
+// Team autocomplete (custom dropdown)
+// ============================================================
+const teamDropdown = document.getElementById('teamDropdown');
+ 
 teamInput.addEventListener('input', function() {
     const query = this.value.trim().toLowerCase();
-    const datalist = document.getElementById('teamSuggestions');
-    datalist.innerHTML = '';
-    if (query.length < 2) return;
+    teamDropdown.innerHTML = '';
+    teamDropdown.style.display = 'none';
+ 
+    if (query.length < 2 || allTeams.length === 0) return;
+ 
     const matches = allTeams
         .filter(t => t.name.toLowerCase().includes(query))
-        .slice(0, 5);
+        .slice(0, 8);
+ 
+    if (matches.length === 0) return;
+ 
     matches.forEach(t => {
-        const option = document.createElement('option');
-        option.value = t.name;
-        datalist.appendChild(option);
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.textContent = t.name;
+        item.addEventListener('click', () => {
+            teamInput.value = t.name;
+            teamDropdown.style.display = 'none';
+            teamInput.focus();
+        });
+        teamDropdown.appendChild(item);
     });
+ 
+    teamDropdown.style.display = 'block';
 });
+ 
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!teamInput.contains(e.target) && !teamDropdown.contains(e.target)) {
+        teamDropdown.style.display = 'none';
+    }
+});
+ 
 
 // ============================================================
 // 14. Load data when page loads
