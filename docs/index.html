@@ -731,59 +731,61 @@ document.addEventListener('click', (e) => {
 // ============================================================
 loadData();
 
+ 
 // ============================================================
 // Username: Read-only input with searchable dropdown
 // ============================================================
-
+document.addEventListener('DOMContentLoaded', function() {
+    const usernameInput = document.getElementById('username');
+    const usernameDropdown = document.getElementById('usernameDropdown');
+    const usernameSearch = document.getElementById('usernameSearch');
+    const usernameResults = document.getElementById('usernameResults');
  
-usernameInput.addEventListener('click', function() {
-    console.log('Username field clicked'); // 👈 Debug line
-    usernameDropdown.style.display = 'block';
-    usernameSearch.value = '';
-    usernameSearch.focus();
-    filterUsernameResults('');
-});
- 
- 
-// Type in search box → filter results
-usernameSearch.addEventListener('input', function() {
-    filterUsernameResults(this.value.trim().toLowerCase());
-});
- 
-function filterUsernameResults(query) {
-    usernameResults.innerHTML = '';
- 
-    const matches = allMembers
-        .filter(m => m.login.toLowerCase().includes(query))
-        .slice(0, 8);
- 
-    if (matches.length === 0) {
-        const item = document.createElement('div');
-        item.className = 'dropdown-item';
-        item.textContent = 'No matching users found';
-        item.style.color = '#888';
-        item.style.cursor = 'default';
-        usernameResults.appendChild(item);
-        return;
-    }
- 
-    matches.forEach(m => {
-        const item = document.createElement('div');
-        item.className = 'dropdown-item';
-        item.textContent = m.login;
-        item.addEventListener('click', () => {
-            usernameInput.value = m.login;
-            usernameDropdown.style.display = 'none';
-        });
-        usernameResults.appendChild(item);
+    usernameInput.addEventListener('click', function() {
+        usernameDropdown.style.display = 'block';
+        usernameSearch.value = '';
+        usernameSearch.focus();
+        filterUsernameResults('');
     });
-}
  
-// Close dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!usernameInput.contains(e.target) && !usernameDropdown.contains(e.target)) {
-        usernameDropdown.style.display = 'none';
+    usernameSearch.addEventListener('input', function() {
+        filterUsernameResults(this.value.trim().toLowerCase());
+    });
+ 
+    function filterUsernameResults(query) {
+        usernameResults.innerHTML = '';
+ 
+        const matches = allMembers
+            .filter(m => m.login.toLowerCase().includes(query))
+            .slice(0, 8);
+ 
+        if (matches.length === 0) {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'No matching users found';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            usernameResults.appendChild(item);
+            return;
+        }
+ 
+        matches.forEach(m => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = m.login;
+            item.addEventListener('click', () => {
+                usernameInput.value = m.login;
+                usernameDropdown.style.display = 'none';
+            });
+            usernameResults.appendChild(item);
+        });
     }
+ 
+    document.addEventListener('click', (e) => {
+        if (!usernameInput.contains(e.target) && !usernameDropdown.contains(e.target)) {
+            usernameDropdown.style.display = 'none';
+        }
+    });
 });
  
 </script>
