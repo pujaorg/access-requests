@@ -743,9 +743,10 @@ loadData();
 // ============================================================
 // Debug: Check username element and click
 // ============================================================
+document.addEventListener('DOMContentLoaded', function() {
     const testInput = document.getElementById('username');
     console.log('username element:', testInput);
-     
+ 
     if (testInput) {
         testInput.addEventListener('click', function() {
             console.log('Username clicked!');
@@ -756,6 +757,7 @@ loadData();
             }
         });
     }
+});
 
     console.log('Script ended');
 </script>
