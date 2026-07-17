@@ -153,7 +153,8 @@
             <!-- Username -->
             <div class="form-group">
                 <label for="username">GitHub Username <span class="required">*</span></label>
-                <input type="text" id="username" placeholder="e.g., yourusername" required />
+                <input type="text" id="username" list="usernameSuggestions" placeholder="e.g., yourusername" required />
+                <datalist id="usernameSuggestions"></datalist>
                 <div id="usernameFeedback" class="feedback"></div>
             </div>
  
@@ -161,7 +162,8 @@
             <div id="teamFields">
                 <div class="form-group">
                     <label for="team">GitHub Team Name <span class="required">*</span></label>
-                    <input type="text" id="team" placeholder="e.g., backend-team" />
+                    <input type="text" id="team" list="teamSuggestions" placeholder="e.g., backend-team" />
+                    <datalist id="teamSuggestions"></datalist>
                     <div id="teamFeedback" class="feedback"></div>
                 </div>
             </div>
@@ -475,6 +477,86 @@ function buildIssueBody() {
         // 10. Initial state
         // ============================================================
         accessType.dispatchEvent(new Event('change'));
+        // ============================================================
+        // Load teams and members (2 API calls per session)
+        // ============================================================
+        let allTeams = [];
+        let allMembers = [];
+         
+        async function loadData() {
+            try {
+                const [teamsRes, membersRes] = await Promise.all([
+                    fetch('https://api.github.com/orgs/pujaorg/teams', {
+                        headers: { 'Authorization': 'token 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' }
+                    }),
+                    fetch('https://api.github.com/orgs/pujaorg/members', {
+                        headers: { 'Authorization': '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' }
+                    })
+                ]);
+         
+                if (teamsRes.ok && membersRes.ok) {
+                    allTeams = await teamsRes.json();
+                    allMembers = await membersRes.json();
+                    localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
+                    localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+                } else {
+                    loadFromCache();
+                }
+            } catch {
+                loadFromCache();
+            }
+        }
+         
+        function loadFromCache() {
+            const cachedTeams = localStorage.getItem('cachedTeams');
+            const cachedMembers = localStorage.getItem('cachedMembers');
+            if (cachedTeams) allTeams = JSON.parse(cachedTeams);
+            if (cachedMembers) allMembers = JSON.parse(cachedMembers);
+        }
+         
+        // ============================================================
+        // Username autocomplete (from cached data)
+        // ============================================================
+        const usernameInput = document.getElementById('username');
+        const teamInput = document.getElementById('team');
+         
+        usernameInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            const datalist = document.getElementById('usernameSuggestions');
+            datalist.innerHTML = '';
+            if (query.length < 2) return;
+            const matches = allMembers
+                .filter(m => m.login.toLowerCase().includes(query))
+                .slice(0, 5);
+            matches.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.login;
+                datalist.appendChild(option);
+            });
+        });
+         
+        // ============================================================
+        // Team autocomplete (from cached data)
+        // ============================================================
+        teamInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            const datalist = document.getElementById('teamSuggestions');
+            datalist.innerHTML = '';
+            if (query.length < 2) return;
+            const matches = allTeams
+                .filter(t => t.name.toLowerCase().includes(query))
+                .slice(0, 5);
+            matches.forEach(t => {
+                const option = document.createElement('option');
+                option.value = t.name;
+                datalist.appendChild(option);
+            });
+        });
+         
+        // ============================================================
+        // Load data when page loads
+        // ============================================================
+        loadData();
     </script>
 </body>
 </html>
