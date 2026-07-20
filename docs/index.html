@@ -177,6 +177,23 @@
         #usernameResults .dropdown-item:hover {
             background: #f0f6fc;
         }
+        .clear-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 16px;
+            color: #888;
+            padding: 4px;
+            border-radius: 50%;
+            line-height: 1;
+            user-select: none;
+        }
+        .clear-btn:hover {
+            color: #d73a49;
+            background: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -199,6 +216,7 @@
                 <label for="username">GitHub Username <span class="required">*</span></label>
                 <div style="position: relative;">
                     <input type="text" id="username" placeholder="Select a user..." readonly autocomplete="off" />
+                    <span id="usernameClear" class="clear-btn" style="display: none;">✕</span>
                     <div id="usernameDropdown" class="dropdown-list">
                         <input type="text" id="usernameSearch" placeholder="Search users..." class="dropdown-search" />
                         <div id="usernameResults"></div>
@@ -213,6 +231,7 @@
                     <label for="team">GitHub Team Name <span class="required">*</span></label>
                     <div style="position: relative;">
                         <input type="text" id="team" placeholder="Select a team..." readonly autocomplete="off" />
+                        <span id="teamClear" class="clear-btn" style="display: none;">✕</span>
                         <div id="teamDropdown" class="dropdown-list">
                             <input type="text" id="teamSearch" placeholder="Search teams..." class="dropdown-search" />
                             <div id="teamResults"></div>
@@ -228,6 +247,7 @@
                     <label for="repo">Repository Name <span class="required">*</span></label>
                     <div style="position: relative;">
                         <input type="text" id="repo" placeholder="Select a repository..." readonly autocomplete="off" />
+                        <span id="repoClear" class="clear-btn" style="display: none;">✕</span>
                         <div id="repoDropdown" class="dropdown-list">
                             <input type="text" id="repoSearch" placeholder="Search repositories..." class="dropdown-search" />
                             <div id="repoResults"></div>
@@ -255,6 +275,7 @@
                 <label for="approver">Approver <span class="required">*</span></label>
                 <div style="position: relative;">
                     <input type="text" id="approver" placeholder="Select an approver..." readonly autocomplete="off" />
+                    <span id="approverClear" class="clear-btn" style="display: none;">✕</span>
                     <div id="approverDropdown" class="dropdown-list">
                         <input type="text" id="approverSearch" placeholder="Search approvers..." class="dropdown-search" />
                         <div id="approverResults"></div>
@@ -322,6 +343,11 @@
     const repoSearch = document.getElementById('repoSearch');
     const repoResults = document.getElementById('repoResults');
 
+    // Clear buttons
+    const usernameClear = document.getElementById('usernameClear');
+    const teamClear = document.getElementById('teamClear');
+    const repoClear = document.getElementById('repoClear');
+    const approverClear = document.getElementById('approverClear');
     // ============================================================
     // GitHub Configuration
     // ============================================================
@@ -757,6 +783,7 @@
             item.textContent = t.name;
             item.addEventListener('click', () => {
                 teamInput.value = t.name;
+                teamClear.style.display = 'inline';
                 teamDropdown.style.display = 'none';
             });
             teamResults.appendChild(item);
@@ -827,6 +854,7 @@
             item.textContent = r.full_name;
             item.addEventListener('click', () => {
                 repoInput.value = r.full_name;
+                repoClear.style.display = 'inline';
                 repoDropdown.style.display = 'none';
             });
             repoResults.appendChild(item);
@@ -846,6 +874,51 @@
     // that called showUsernameDropdown() and wiped out this exact
     // search box on every click has been removed entirely.
     // ============================================================
+
+    // ============================================================
+    // Clear button functionality
+    // ============================================================
+     
+    // Username clear
+    usernameInput.addEventListener('change', function() {
+        usernameClear.style.display = this.value ? 'inline' : 'none';
+    });
+    usernameClear.addEventListener('click', function() {
+        usernameInput.value = '';
+        usernameClear.style.display = 'none';
+        usernameDropdown.style.display = 'none';
+    });
+     
+    // Team clear
+    teamInput.addEventListener('change', function() {
+        teamClear.style.display = this.value ? 'inline' : 'none';
+    });
+    teamClear.addEventListener('click', function() {
+        teamInput.value = '';
+        teamClear.style.display = 'none';
+        teamDropdown.style.display = 'none';
+    });
+     
+    // Repo clear
+    repoInput.addEventListener('change', function() {
+        repoClear.style.display = this.value ? 'inline' : 'none';
+    });
+    repoClear.addEventListener('click', function() {
+        repoInput.value = '';
+        repoClear.style.display = 'none';
+        repoDropdown.style.display = 'none';
+    });
+     
+    // Approver clear
+    approverInput.addEventListener('change', function() {
+        approverClear.style.display = this.value ? 'inline' : 'none';
+    });
+    approverClear.addEventListener('click', function() {
+        approverInput.value = '';
+        approverClear.style.display = 'none';
+        approverDropdown.style.display = 'none';
+    });
+        
     usernameInput.addEventListener('click', function() {
         usernameDropdown.style.display = 'block';
         usernameSearch.value = '';
@@ -893,6 +966,7 @@
             item.textContent = m.login;
             item.addEventListener('click', () => {
                 usernameInput.value = m.login;
+                usernameClear.style.display = 'inline';
                 usernameDropdown.style.display = 'none';
             });
             usernameResults.appendChild(item);
@@ -957,6 +1031,7 @@
             item.textContent = a;
             item.addEventListener('click', () => {
                 approverInput.value = a;
+                approverClear.style.display = 'inline';
                 approverDropdown.style.display = 'none';
             });
             approverResults.appendChild(item);
