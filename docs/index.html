@@ -646,8 +646,10 @@
     let allTeams = [];
     let allMembers = [];
     let allRepos = [];
+    let isLoading = true;
 
     async function loadData() {
+        isLoading = true;
         try {
             console.log('Fetching teams, members, and repos...');
             const [teamsRes, membersRes, reposRes] = await Promise.all([
@@ -692,6 +694,7 @@
             console.error('Error loading data:', error);
             loadFromCache();
         }
+        isLoading = false;
     }
 
     function loadFromCache() {
@@ -711,8 +714,21 @@
         teamDropdown.style.display = 'block';
         teamSearch.value = '';
         teamSearch.focus();
+     
+        if (isLoading) {
+            teamResults.innerHTML = '';
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'Loading teams...';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            teamResults.appendChild(item);
+            return;
+        }
+     
         filterTeamResults('');
     });
+     
 
     teamSearch.addEventListener('input', function() {
         filterTeamResults(this.value.trim().toLowerCase());
@@ -768,8 +784,21 @@
         repoDropdown.style.display = 'block';
         repoSearch.value = '';
         repoSearch.focus();
+     
+        if (isLoading) {
+            repoResults.innerHTML = '';
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'Loading repositories...';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            repoResults.appendChild(item);
+            return;
+        }
+     
         filterRepoResults('');
     });
+ 
 
     repoSearch.addEventListener('input', function() {
         filterRepoResults(this.value.trim().toLowerCase());
@@ -821,8 +850,21 @@
         usernameDropdown.style.display = 'block';
         usernameSearch.value = '';
         usernameSearch.focus();
+     
+        if (isLoading) {
+            usernameResults.innerHTML = '';
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'Loading users...';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            usernameResults.appendChild(item);
+            return;
+        }
+     
         filterUsernameResults('');
     });
+     
 
     usernameSearch.addEventListener('input', function() {
         filterUsernameResults(this.value.trim().toLowerCase());
@@ -872,8 +914,23 @@
         approverDropdown.style.display = 'block';
         approverSearch.value = '';
         approverSearch.focus();
+     
+        // No isLoading check needed for approver (it's a static list),
+        // but keep it consistent if you want.
+        if (isLoading) {
+            approverResults.innerHTML = '';
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'Loading approvers...';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            approverResults.appendChild(item);
+            return;
+        }
+     
         filterApproverResults('');
     });
+     
 
     approverSearch.addEventListener('input', function() {
         filterApproverResults(this.value.trim().toLowerCase());
