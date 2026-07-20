@@ -680,7 +680,7 @@
             console.log('Fetching teams, members, and repos...');
      
             // --- Fetch all teams (pagination) ---
-            let allTeams = [];
+            allTeams = []; // 👈 Use global variable
             let page = 1;
             let hasMore = true;
             while (hasMore) {
@@ -703,7 +703,7 @@
             }
      
             // --- Fetch all members (pagination) ---
-            let allMembers = [];
+            allMembers = []; // 👈 Use global variable
             page = 1;
             hasMore = true;
             while (hasMore) {
@@ -726,7 +726,7 @@
             }
      
             // --- Fetch all repos (pagination) ---
-            let allRepos = [];
+            allRepos = []; // 👈 Use global variable
             page = 1;
             hasMore = true;
             while (hasMore) {
@@ -753,9 +753,6 @@
             console.log('Repos loaded:', allRepos.length);
      
             // Store everything
-            window.allTeams = allTeams;
-            window.allMembers = allMembers;
-            window.allRepos = allRepos;
             localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
             localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
             localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
