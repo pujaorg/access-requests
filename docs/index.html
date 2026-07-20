@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -250,6 +251,19 @@
                 </div>
             </div>
 
+            <!-- Approver -->
+            <div class="form-group">
+                <label for="approver">Approver <span class="required">*</span></label>
+                <div style="position: relative;">
+                    <input type="text" id="approver" placeholder="Select an approver..." readonly autocomplete="off" />
+                    <div id="approverDropdown" class="dropdown-list">
+                        <input type="text" id="approverSearch" placeholder="Search approvers..." class="dropdown-search" />
+                        <div id="approverResults"></div>
+                    </div>
+                </div>
+                <div id="approverFeedback" class="feedback"></div>
+            </div>
+
             <!-- Justification -->
             <div class="form-group">
                 <label for="justification">Justification <span class="required">*</span></label>
@@ -283,6 +297,12 @@
     const durationFeedback = document.getElementById('durationFeedback');
     const justification = document.getElementById('justification');
     const justificationFeedback = document.getElementById('justificationFeedback');
+    const approver = document.getElementById('approver');
+    const approverFeedback = document.getElementById('approverFeedback');
+    const approverInput = document.getElementById('approver');
+    const approverDropdown = document.getElementById('approverDropdown');
+    const approverSearch = document.getElementById('approverSearch');
+    const approverResults = document.getElementById('approverResults');
     const charCount = document.getElementById('charCount');
     const submitBtn = document.getElementById('submitBtn');
     const message = document.getElementById('message');
@@ -311,6 +331,12 @@
     const GITHUB_TOKEN = localStorage.getItem('github_token') || 'your-token';
 
     // ============================================================
+    // Approvers list — EDIT THIS ARRAY to add/remove/rename approvers.
+    // Shown in the same order as listed here.
+    // ============================================================
+    const APPROVERS = ['pujadas02', 'beeo024', 'approver3'];
+
+    // ============================================================
     // 2. Toggle fields based on access type
     // ============================================================
     accessType.addEventListener('change', () => {
@@ -320,6 +346,7 @@
         teamFeedback.textContent = '';
         repoFeedback.textContent = '';
         durationFeedback.textContent = '';
+        approverFeedback.textContent = '';
     });
 
     // ============================================================
@@ -395,6 +422,28 @@
     }
 
     // ============================================================
+    // 4b. Approver validation
+    // ============================================================
+    function validateApprover() {
+        const val = approver.value.trim();
+        if (!val) {
+            approverFeedback.textContent = '❌ Please select an approver.';
+            approverFeedback.className = 'feedback error';
+            return false;
+        }
+        const exists = APPROVERS.some(a => a.toLowerCase() === val.toLowerCase());
+        if (exists) {
+            approverFeedback.textContent = '✅ Valid approver.';
+            approverFeedback.className = 'feedback success';
+            return true;
+        } else {
+            approverFeedback.textContent = '❌ Please select an approver from the list.';
+            approverFeedback.className = 'feedback error';
+            return false;
+        }
+    }
+
+    // ============================================================
     // 5. Team validation
     // ============================================================
     function validateTeam() {
@@ -433,7 +482,7 @@
                 repoFeedback.className = 'feedback error';
                 return false;
             }
-            const exists = allRepos.some(r => r.name.toLowerCase() === val.toLowerCase());
+            const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
             if (exists) {
                 repoFeedback.textContent = '✅ Valid repository in organization.';
                 repoFeedback.className = 'feedback success';
@@ -476,6 +525,7 @@
 
         let body = `### Your GitHub Username\n${usernameVal}\n\n`;
         body += `### Access Type\n${isTeam ? 'Team-based' : 'Repo-based'}\n\n`;
+        body += `### Approver\n${approver.value.trim()}\n\n`;
 
         if (isTeam) {
             body += `### GitHub Team Name\n${team.value.trim()}\n\n`;
@@ -502,12 +552,13 @@
         message.className = 'message';
 
         const isUsernameValid = await validateUsername(username.value);
+        const isApproverValid = validateApprover();
         const isJustificationValid = validateJustification();
         const isTeamValid = validateTeam();
         const isRepoValid = validateRepo();
         const isDurationValid = validateDuration();
 
-        if (!isUsernameValid || !isJustificationValid || !isTeamValid || !isRepoValid || !isDurationValid) {
+        if (!isUsernameValid || !isApproverValid || !isJustificationValid || !isTeamValid || !isRepoValid || !isDurationValid) {
             message.textContent = '❌ Please fix the errors above.';
             message.className = 'message error';
             message.style.display = 'block';
@@ -713,7 +764,7 @@
         repoResults.innerHTML = '';
 
         const matches = allRepos
-            .filter(r => r.name.toLowerCase().includes(query))
+            .filter(r => r.full_name.toLowerCase().includes(query))
             .slice(0, 8);
 
         if (matches.length === 0) {
@@ -729,9 +780,9 @@
         matches.forEach(r => {
             const item = document.createElement('div');
             item.className = 'dropdown-item';
-            item.textContent = r.name;
+            item.textContent = r.full_name;
             item.addEventListener('click', () => {
-                repoInput.value = r.name;
+                repoInput.value = r.full_name;
                 repoDropdown.style.display = 'none';
             });
             repoResults.appendChild(item);
@@ -796,9 +847,72 @@
             usernameDropdown.style.display = 'none';
         }
     });
+
+    // ============================================================
+    // 15. Approver: Read-only input with searchable dropdown.
+    // Static list (APPROVERS array above) — no API fetch needed,
+    // so this works immediately on page load.
+    // ============================================================
+    approverInput.addEventListener('click', function() {
+        approverDropdown.style.display = 'block';
+        approverSearch.value = '';
+        approverSearch.focus();
+        filterApproverResults('');
+    });
+
+    approverSearch.addEventListener('input', function() {
+        filterApproverResults(this.value.trim().toLowerCase());
+    });
+
+    function filterApproverResults(query) {
+        approverResults.innerHTML = '';
+
+        const matches = APPROVERS.filter(a => a.toLowerCase().includes(query));
+
+        if (matches.length === 0) {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = 'No matching approvers found';
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            approverResults.appendChild(item);
+            return;
+        }
+
+        matches.forEach(a => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = a;
+            item.addEventListener('click', () => {
+                approverInput.value = a;
+                approverDropdown.style.display = 'none';
+            });
+            approverResults.appendChild(item);
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!approverInput.contains(e.target) && !approverDropdown.contains(e.target)) {
+            approverDropdown.style.display = 'none';
+        }
+    });
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
