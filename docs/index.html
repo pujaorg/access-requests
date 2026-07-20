@@ -678,44 +678,88 @@
         isLoading = true;
         try {
             console.log('Fetching teams, members, and repos...');
-            const [teamsRes, membersRes, reposRes] = await Promise.all([
-                fetch(`https://api.github.com/orgs/${GITHUB_ORG}/teams`, {
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json'
+     
+            // --- Fetch all teams (pagination) ---
+            let allTeams = [];
+            let page = 1;
+            let hasMore = true;
+            while (hasMore) {
+                const res = await fetch(
+                    `https://api.github.com/orgs/${GITHUB_ORG}/teams?per_page=100&page=${page}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
                     }
-                }),
-                fetch(`https://api.github.com/orgs/${GITHUB_ORG}/members`, {
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }),
-                fetch(`https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100`, {
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                })
-            ]);
-            console.log('Teams response status:', teamsRes.status);
-            console.log('Members response status:', membersRes.status);
-            console.log('Repos response status:', reposRes.status);
-
-            if (teamsRes.ok && membersRes.ok && reposRes.ok) {
-                allTeams = await teamsRes.json();
-                allMembers = await membersRes.json();
-                allRepos = await reposRes.json();
-                localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
-                localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
-                localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
-                console.log('Teams loaded:', allTeams.length);
-                console.log('Members loaded:', allMembers.length);
-                console.log('Repos loaded:', allRepos.length);
-            } else {
-                console.warn('API call failed — using cache');
-                loadFromCache();
+                );
+                const data = await res.json();
+                if (data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allTeams = allTeams.concat(data);
+                    page++;
+                }
             }
+     
+            // --- Fetch all members (pagination) ---
+            let allMembers = [];
+            page = 1;
+            hasMore = true;
+            while (hasMore) {
+                const res = await fetch(
+                    `https://api.github.com/orgs/${GITHUB_ORG}/members?per_page=100&page=${page}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+                const data = await res.json();
+                if (data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allMembers = allMembers.concat(data);
+                    page++;
+                }
+            }
+     
+            // --- Fetch all repos (pagination) ---
+            let allRepos = [];
+            page = 1;
+            hasMore = true;
+            while (hasMore) {
+                const res = await fetch(
+                    `https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100&page=${page}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+                const data = await res.json();
+                if (data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allRepos = allRepos.concat(data);
+                    page++;
+                }
+            }
+     
+            console.log('Teams loaded:', allTeams.length);
+            console.log('Members loaded:', allMembers.length);
+            console.log('Repos loaded:', allRepos.length);
+     
+            // Store everything
+            window.allTeams = allTeams;
+            window.allMembers = allMembers;
+            window.allRepos = allRepos;
+            localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
+            localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+            localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
+     
         } catch (error) {
             console.error('Error loading data:', error);
             loadFromCache();
