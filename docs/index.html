@@ -716,6 +716,8 @@
                 form.reset();
                 charCount.textContent = '0';
                 accessType.dispatchEvent(new Event('change'));
+
+                submitBtn.textContent = 'Submitted';
             } else {
                 const error = await response.json();
                 message.textContent = `❌ Failed to submit: ${error.message || 'Unknown error'}`;
@@ -726,10 +728,11 @@
             message.textContent = `❌ Error: ${err.message}`;
             message.className = 'message error';
             message.style.display = 'block';
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Request';
         }
+        //  finally {
+        //     submitBtn.disabled = false;
+        //     submitBtn.textContent = 'Submit Request';
+        // }
     });
 
     // ============================================================
@@ -754,7 +757,8 @@
             allTeams = []; // 👈 Use global variable
             let page = 1;
             let hasMore = true;
-            while (hasMore) {
+            let maxPage = 10;
+            while (hasMore && page <= maxPage) {
                 const res = await fetch(
                     `https://api.github.com/orgs/${GITHUB_ORG}/teams?per_page=100&page=${page}`,
                     {
@@ -777,7 +781,8 @@
             allMembers = []; // 👈 Use global variable
             page = 1;
             hasMore = true;
-            while (hasMore) {
+            maxPage = 10;
+            while (hasMore && page <= maxPage) {
                 const res = await fetch(
                     `https://api.github.com/orgs/${GITHUB_ORG}/members?per_page=100&page=${page}`,
                     {
@@ -800,7 +805,8 @@
             allRepos = []; // 👈 Use global variable
             page = 1;
             hasMore = true;
-            while (hasMore) {
+            maxPage = 10;
+            while (hasMore && page <= maxPage) {
                 const res = await fetch(
                     `https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100&page=${page}`,
                     {
