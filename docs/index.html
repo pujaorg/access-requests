@@ -338,16 +338,28 @@
     // ============================================================
     // 2. Toggle fields based on access type
     // ============================================================
+    // accessType.addEventListener('change', () => {
+    //     const isTeam = accessType.value === 'team';
+    //     teamFields.classList.toggle('hidden', !isTeam);
+    //     repoFields.classList.toggle('hidden', isTeam);
+    //     teamFeedback.textContent = '';
+    //     repoFeedback.textContent = '';
+    //     durationFeedback.textContent = '';
+    //     approverFeedback.textContent = '';
+    // });
     accessType.addEventListener('change', () => {
         const isTeam = accessType.value === 'team';
         teamFields.classList.toggle('hidden', !isTeam);
         repoFields.classList.toggle('hidden', isTeam);
+     
+        // Clear all feedback messages
         teamFeedback.textContent = '';
         repoFeedback.textContent = '';
         durationFeedback.textContent = '';
+        usernameFeedback.textContent = '';
         approverFeedback.textContent = '';
+        justificationFeedback.textContent = '';
     });
-
     // ============================================================
     // 3. Username validation (on submit)
     // ============================================================
