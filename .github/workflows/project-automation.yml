@@ -80,7 +80,7 @@ jobs:
 
           for i in {1..10}; do
             ITEM_ID=$(gh api graphql -f query='
-              query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
+              query($org:String!,$projectNumber:Int!){
                 organization(login:$org){
                   projectV2(number:$projectNumber){
                     items(first:100){
@@ -95,10 +95,9 @@ jobs:
                     }
                   }
                 }
-              }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" \
-              --jq '.data.organization.projectV2.items.nodes[] | select(.content.number==$issueNumber) | .id')
+              }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
-            if [[ -n "$ITEM_ID" ]]; then
+            if [[ -n "$ITEM_ID" ]] && [[ "$ITEM_ID" != "null" ]]; then
               echo "Found Project Item: $ITEM_ID"
               break
             fi
@@ -107,7 +106,7 @@ jobs:
             sleep 2
           done
 
-          if [[ -z "$ITEM_ID" ]]; then
+          if [[ -z "$ITEM_ID" ]] || [[ "$ITEM_ID" == "null" ]]; then
             echo "::error::Issue could not be added to project"
             exit 1
           fi
