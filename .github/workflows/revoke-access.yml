@@ -83,41 +83,31 @@ jobs:
  
             echo "======================================"
             echo "📋 Processing issue #$ISSUE_NUMBER"
-            echo "All labels: $LABELS"
  
-            # Extract expiration from labels
-            EXPIRATION=$(echo "$LABELS" | grep -oP 'expires-\K[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
-            echo "Extracted EXPIRATION: '$EXPIRATION'"
+            # Find the exact expiration label from the labels array
+            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
+            echo "Expiration label found: '$EXPIRATION_LABEL'"
  
-            if [ -z "$EXPIRATION" ]; then
+            if [ -z "$EXPIRATION_LABEL" ]; then
               echo "⏭️ No expiration label found — skipping"
               continue
             fi
  
+            # Extract just the date part from the label
+            EXPIRATION=$(echo "$EXPIRATION_LABEL" | sed 's/expires-//')
+            echo "Expiration date: $EXPIRATION"
+ 
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               echo "⏰ EXPIRED!"
  
-              # Get the full label name
-              FULL_LABEL="expires-$EXPIRATION"
-              echo "Full label to delete: $FULL_LABEL"
- 
-              # Try to delete the label using the full name
-              echo "Attempting to delete label: $FULL_LABEL"
+              # Delete the exact label found
+              echo "Deleting label: $EXPIRATION_LABEL"
               DELETE_RESPONSE=$(curl -s -X DELETE \
                 -H "Authorization: token $GITHUB_TOKEN" \
                 -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/labels/$FULL_LABEL" \
+                "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/labels/$EXPIRATION_LABEL" \
                 -w "\n%{http_code}" 2>&1)
               echo "Delete response: $DELETE_RESPONSE"
- 
-              # Also try the raw format just in case
-              echo "Attempting to delete label: expires-$EXPIRATION"
-              DELETE_RESPONSE2=$(curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/labels/expires-$EXPIRATION" \
-                -w "\n%{http_code}" 2>&1)
-              echo "Delete response 2: $DELETE_RESPONSE2"
  
               USERNAME=$(extract_value "Your GitHub Username" "$BODY" || extract_value "GitHub Username" "$BODY")
               REPO_NAME=$(extract_value "Repository Name" "$BODY" || extract_value "Repository" "$BODY")
