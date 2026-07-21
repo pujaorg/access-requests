@@ -2,7 +2,8 @@ name: Add Issue to Project
 
 on:
   issues:
-    types: [opened]
+    types:
+      - opened
 
 permissions:
   contents: read
@@ -12,11 +13,12 @@ permissions:
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Add issue to project
+      - name: Add issue to GitHub Project
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
         run: |
-          gh project item-add ${{ github.event.issue.number }} \
-            --url "${{ github.event.issue.html_url }}" \
-            --owner "pujaorg"
+          gh project item-add 1 \
+            --owner pujaorg \
+            --url "${{ github.event.issue.html_url }}"
