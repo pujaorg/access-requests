@@ -169,14 +169,6 @@
         .dropdown-search:focus {
             border-bottom-color: #0969da;
         }
-        #usernameResults .dropdown-item {
-            padding: 8px 14px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        #usernameResults .dropdown-item:hover {
-            background: #f0f6fc;
-        }
         .clear-btn {
             position: absolute;
             right: 12px;
@@ -319,7 +311,7 @@
 
     <script>
     // ============================================================
-    // 1. DOM refs
+    // DOM refs
     // ============================================================
     const form = document.getElementById('accessForm');
     const accessType = document.getElementById('accessType');
@@ -336,36 +328,12 @@
     const justificationFeedback = document.getElementById('justificationFeedback');
     const approver = document.getElementById('approver');
     const approverFeedback = document.getElementById('approverFeedback');
-    const approverInput = document.getElementById('approver');
-    const approverDropdown = document.getElementById('approverDropdown');
-    const approverSearch = document.getElementById('approverSearch');
-    const approverResults = document.getElementById('approverResults');
     const charCount = document.getElementById('charCount');
     const submitBtn = document.getElementById('submitBtn');
     const message = document.getElementById('message');
-
     const teamFields = document.getElementById('teamFields');
     const repoFields = document.getElementById('repoFields');
 
-    const teamInput = document.getElementById('team');
-    const teamDropdown = document.getElementById('teamDropdown');
-    const teamSearch = document.getElementById('teamSearch');
-    const teamResults = document.getElementById('teamResults');
-    const usernameInput = document.getElementById('username');
-    const usernameDropdown = document.getElementById('usernameDropdown');
-    const usernameSearch = document.getElementById('usernameSearch');
-    const usernameResults = document.getElementById('usernameResults');
-    const repoInput = document.getElementById('repo');
-    const repoDropdown = document.getElementById('repoDropdown');
-    const repoSearch = document.getElementById('repoSearch');
-    const repoResults = document.getElementById('repoResults');
-
-
-    // Clear buttons
-    const usernameClear = document.getElementById('usernameClear');
-    const teamClear = document.getElementById('teamClear');
-    const repoClear = document.getElementById('repoClear');
-    const approverClear = document.getElementById('approverClear');
     // ============================================================
     // GitHub Configuration
     // ============================================================
@@ -373,43 +341,211 @@
     const GITHUB_REPO = 'access-requests';
     const GITHUB_TOKEN = localStorage.getItem('github_token') || 'your-token';
 
-    // ============================================================
     // Approvers list — EDIT THIS ARRAY to add/remove/rename approvers.
-    // Shown in the same order as listed here.
-    // ============================================================
     const APPROVERS = ['pujadas02', 'beep024', 'approver3'];
 
     // ============================================================
-    // 2. Toggle fields based on access type
+    // Toggle fields based on access type
     // ============================================================
-    // accessType.addEventListener('change', () => {
-    //     const isTeam = accessType.value === 'team';
-    //     teamFields.classList.toggle('hidden', !isTeam);
-    //     repoFields.classList.toggle('hidden', isTeam);
-    //     teamFeedback.textContent = '';
-    //     repoFeedback.textContent = '';
-    //     durationFeedback.textContent = '';
-    //     approverFeedback.textContent = '';
-    // });
     accessType.addEventListener('change', () => {
         const isTeam = accessType.value === 'team';
         teamFields.classList.toggle('hidden', !isTeam);
         repoFields.classList.toggle('hidden', isTeam);
-     
-        // Clear all feedback messages
-        teamFeedback.textContent = '';
-        repoFeedback.textContent = '';
-        durationFeedback.textContent = '';
-        usernameFeedback.textContent = '';
-        approverFeedback.textContent = '';
-        justificationFeedback.textContent = '';
-     
-        // Clear global message
+
+        [teamFeedback, repoFeedback, durationFeedback, usernameFeedback, approverFeedback, justificationFeedback]
+            .forEach(el => el.textContent = '');
+
         message.style.display = 'none';
         message.textContent = '';
     });
+
     // ============================================================
-    // 3. Username validation (on submit)
+    // Data loading (teams, members, repos) — 3 paginated API calls
+    // ============================================================
+    let allTeams = [];
+    let allMembers = [];
+    let allRepos = [];
+    let isLoading = true;
+
+    async function fetchAllPages(url) {
+        let results = [];
+        let page = 1;
+        const maxPage = 10;
+        let hasMore = true;
+        while (hasMore && page <= maxPage) {
+            const res = await fetch(`${url}?per_page=100&page=${page}`, {
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+            const data = await res.json();
+            if (!data.length) {
+                hasMore = false;
+            } else {
+                results = results.concat(data);
+                page++;
+            }
+        }
+        return results;
+    }
+
+    async function loadData() {
+        isLoading = true;
+        try {
+            console.log('Fetching teams, members, and repos...');
+            [allTeams, allMembers, allRepos] = await Promise.all([
+                fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/teams`),
+                fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/members`),
+                fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/repos`)
+            ]);
+
+            console.log('Teams loaded:', allTeams.length);
+            console.log('Members loaded:', allMembers.length);
+            console.log('Repos loaded:', allRepos.length);
+
+            localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
+            localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
+            localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
+        } catch (error) {
+            console.error('Error loading data:', error);
+            loadFromCache();
+        }
+        isLoading = false;
+    }
+
+    function loadFromCache() {
+        const cachedTeams = localStorage.getItem('cachedTeams');
+        const cachedMembers = localStorage.getItem('cachedMembers');
+        const cachedRepos = localStorage.getItem('cachedRepos');
+        if (cachedTeams) allTeams = JSON.parse(cachedTeams);
+        if (cachedMembers) allMembers = JSON.parse(cachedMembers);
+        if (cachedRepos) allRepos = JSON.parse(cachedRepos);
+    }
+
+    // ============================================================
+    // Generic searchable dropdown
+    // Replaces the four near-identical username/team/repo/approver
+    // blocks from the original file with one reusable factory.
+    // Behavior (click to open, live search, loading state, clear
+    // button, outside-click to close) is identical for every field.
+    // ============================================================
+    function setupDropdown({ inputId, clearId, dropdownId, searchId, resultsId, getItems, getLabel, emptyText, loadingText }) {
+        const input = document.getElementById(inputId);
+        const clearBtn = document.getElementById(clearId);
+        const dropdown = document.getElementById(dropdownId);
+        const search = document.getElementById(searchId);
+        const results = document.getElementById(resultsId);
+
+        function renderMessage(text) {
+            results.innerHTML = '';
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = text;
+            item.style.color = '#888';
+            item.style.cursor = 'default';
+            results.appendChild(item);
+        }
+
+        function filter(query) {
+            results.innerHTML = '';
+            const matches = getItems(query).slice(0, 8);
+
+            if (matches.length === 0) {
+                renderMessage(emptyText);
+                return;
+            }
+
+            matches.forEach(entry => {
+                const label = getLabel(entry);
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+                item.textContent = label;
+                item.addEventListener('click', () => {
+                    input.value = label;
+                    clearBtn.style.display = 'inline';
+                    dropdown.style.display = 'none';
+                });
+                results.appendChild(item);
+            });
+        }
+
+        input.addEventListener('click', () => {
+            dropdown.style.display = 'block';
+            search.value = '';
+            search.focus();
+
+            if (isLoading && loadingText) {
+                renderMessage(loadingText);
+                return;
+            }
+            filter('');
+        });
+
+        search.addEventListener('input', function () {
+            filter(this.value.trim().toLowerCase());
+        });
+
+        input.addEventListener('change', function () {
+            clearBtn.style.display = this.value ? 'inline' : 'none';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            clearBtn.style.display = 'none';
+            dropdown.style.display = 'none';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        return { input };
+    }
+
+    setupDropdown({
+        inputId: 'username', clearId: 'usernameClear', dropdownId: 'usernameDropdown',
+        searchId: 'usernameSearch', resultsId: 'usernameResults',
+        getItems: q => allMembers.filter(m => m.login.toLowerCase().includes(q)),
+        getLabel: m => m.login,
+        emptyText: 'No matching users found', loadingText: 'Loading users...'
+    });
+
+    setupDropdown({
+        inputId: 'team', clearId: 'teamClear', dropdownId: 'teamDropdown',
+        searchId: 'teamSearch', resultsId: 'teamResults',
+        getItems: q => allTeams.filter(t => t.name.toLowerCase().includes(q)),
+        getLabel: t => t.name,
+        emptyText: 'No matching teams found', loadingText: 'Loading teams...'
+    });
+
+    setupDropdown({
+        inputId: 'repo', clearId: 'repoClear', dropdownId: 'repoDropdown',
+        searchId: 'repoSearch', resultsId: 'repoResults',
+        getItems: q => allRepos.filter(r => r.full_name.toLowerCase().includes(q)),
+        getLabel: r => r.full_name,
+        emptyText: 'No matching repositories found', loadingText: 'Loading repositories...'
+    });
+
+    setupDropdown({
+        inputId: 'approver', clearId: 'approverClear', dropdownId: 'approverDropdown',
+        searchId: 'approverSearch', resultsId: 'approverResults',
+        getItems: q => APPROVERS.filter(a => a.toLowerCase().includes(q)),
+        getLabel: a => a,
+        emptyText: 'No matching approvers found', loadingText: 'Loading approvers...'
+    });
+
+    // ============================================================
+    // Justification character counter (live, no validation)
+    // ============================================================
+    justification.addEventListener('input', () => {
+        charCount.textContent = justification.value.length;
+    });
+
+    // ============================================================
+    // Validation
     // ============================================================
     async function validateUsername(usernameValue) {
         if (!usernameValue || usernameValue.trim().length === 0) {
@@ -418,31 +554,18 @@
             return false;
         }
 
-        // Wait for data to load if not already loaded
         if (allMembers.length === 0) {
             await loadData();
         }
 
         const exists = allMembers.some(m => m.login.toLowerCase() === usernameValue.trim().toLowerCase());
-
-        if (exists) {
-            // usernameFeedback.textContent = 'Valid organization member.';
-            // usernameFeedback.className = 'feedback success';
-            return true;
-        } else {
+        if (!exists) {
             usernameFeedback.textContent = 'User not found in your organization.';
             usernameFeedback.className = 'feedback error';
             return false;
         }
+        return true;
     }
-
-    // ============================================================
-    // Justification character counter (live, no validation)
-    // ============================================================
-    justification.addEventListener('input', () => {
-        const len = justification.value.length;
-        charCount.textContent = len;
-    });
 
     function validateJustification() {
         const text = justification.value.trim();
@@ -465,9 +588,6 @@
         return true;
     }
 
-    // ============================================================
-    // 4b. Approver validation
-    // ============================================================
     function validateApprover() {
         const val = approver.value.trim();
         if (!val) {
@@ -476,112 +596,77 @@
             return false;
         }
         const exists = APPROVERS.some(a => a.toLowerCase() === val.toLowerCase());
-        if (exists) {
-            // approverFeedback.textContent = 'Valid approver.';
-            // approverFeedback.className = 'feedback success';
-            return true;
-        } else {
+        if (!exists) {
             approverFeedback.textContent = 'Please select an approver from the list.';
             approverFeedback.className = 'feedback error';
             return false;
         }
+        return true;
     }
 
-    // ============================================================
-    // 5. Team validation
-    // ============================================================
     function validateTeam() {
-        if (accessType.value === 'team') {
-            const val = team.value.trim();
-            if (!val) {
-                teamFeedback.textContent = 'Please select a team.';
-                teamFeedback.className = 'feedback error';
-                return false;
-            }
-
-            // Check if the team exists in the organization teams list
-            const exists = allTeams.some(t => t.name.toLowerCase() === val.toLowerCase());
-
-            if (exists) {
-                // teamFeedback.textContent = 'Valid team in organization.';
-                // teamFeedback.className = 'feedback success';
-                return true;
-            } else {
-                teamFeedback.textContent = 'Team not found in your organization.';
-                teamFeedback.className = 'feedback error';
-                return false;
-            }
+        if (accessType.value !== 'team') return true;
+        const val = team.value.trim();
+        if (!val) {
+            teamFeedback.textContent = 'Please select a team.';
+            teamFeedback.className = 'feedback error';
+            return false;
+        }
+        const exists = allTeams.some(t => t.name.toLowerCase() === val.toLowerCase());
+        if (!exists) {
+            teamFeedback.textContent = 'Team not found in your organization.';
+            teamFeedback.className = 'feedback error';
+            return false;
         }
         return true;
     }
 
-    // ============================================================
-    // 6. Repo validation
-    // ============================================================
     function validateRepo() {
-        if (accessType.value === 'repo') {
-            const val = repo.value.trim();
-            if (!val) {
-                repoFeedback.textContent = 'Please select a repository.';
-                repoFeedback.className = 'feedback error';
-                return false;
-            }
-            const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
-            if (exists) {
-                // repoFeedback.textContent = 'Valid repository in organization.';
-                // repoFeedback.className = 'feedback success';
-                return true;
-            } else {
-                repoFeedback.textContent = 'Repository not found in your organization.';
-                repoFeedback.className = 'feedback error';
-                return false;
-            }
+        if (accessType.value !== 'repo') return true;
+        const val = repo.value.trim();
+        if (!val) {
+            repoFeedback.textContent = 'Please select a repository.';
+            repoFeedback.className = 'feedback error';
+            return false;
+        }
+        const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
+        if (!exists) {
+            repoFeedback.textContent = 'Repository not found in your organization.';
+            repoFeedback.className = 'feedback error';
+            return false;
         }
         return true;
     }
 
-    // ============================================================
-    // 7. Duration validation (repo-based only)
-    // ============================================================
     function validateDuration() {
-        if (accessType.value === 'repo') {
-            const val = parseInt(duration.value);
-            if (isNaN(val) || val < 1 || val > 30) {
-                durationFeedback.textContent = 'Duration must be between 1 and 30 days.';
-                durationFeedback.className = 'feedback error';
-                return false;
-            }
-            durationFeedback.textContent = '';
-            durationFeedback.className = 'feedback';
-            return true;
+        if (accessType.value !== 'repo') return true;
+        const val = parseInt(duration.value);
+        if (isNaN(val) || val < 1 || val > 30) {
+            durationFeedback.textContent = 'Duration must be between 1 and 30 days.';
+            durationFeedback.className = 'feedback error';
+            return false;
         }
+        durationFeedback.textContent = '';
+        durationFeedback.className = 'feedback';
         return true;
     }
-    // ============================================================
-    // Combined validation — calls all individual validations
-    // ============================================================
+
     function validateAllFields() {
-        // Clear previous errors
-        usernameFeedback.textContent = '';
-        teamFeedback.textContent = '';
-        repoFeedback.textContent = '';
-        approverFeedback.textContent = '';
-        justificationFeedback.textContent = '';
-        durationFeedback.textContent = '';
-    
-        // Call all existing validations
+        [usernameFeedback, teamFeedback, repoFeedback, approverFeedback, justificationFeedback, durationFeedback]
+            .forEach(el => el.textContent = '');
+
         const isUsernameValid = validateUsername(username.value);
         const isTeamValid = validateTeam();
         const isRepoValid = validateRepo();
         const isApproverValid = validateApprover();
         const isJustificationValid = validateJustification();
         const isDurationValid = validateDuration();
-    
+
         return isUsernameValid && isTeamValid && isRepoValid && isApproverValid && isJustificationValid && isDurationValid;
     }
 
     // ============================================================
-    // 8. Build issue body
+    // Build issue body
     // ============================================================
     function buildIssueBody() {
         const isTeam = accessType.value === 'team';
@@ -606,50 +691,43 @@
     }
 
     // ============================================================
-    // Review button handler
+    // Review / Back handlers
     // ============================================================
     document.getElementById('reviewBtn').addEventListener('click', function() {
-        console.log('Real review handler started!');
-    // Validate before showing summary
-        if (!validateAllFields()) {
-            return;
-        }
+        if (!validateAllFields()) return;
+
         document.getElementById('formSection').style.display = 'none';
 
         const usernameVal = username.value.trim();
         const accessTypeVal = accessType.value === 'team' ? 'Team Access (Permanent)' : 'Repo Access (Temporary)';
-        const teamVal = team.value.trim();
-        const repoVal = repo.value.trim();
         const permissionVal = permission.options[permission.selectedIndex].text;
         const durationVal = duration.value || 'N/A';
         const justificationVal = justification.value.trim();
         const approverVal = approver.value.trim();
-    
+
         let summary = `
             <p><strong>GitHub Username:</strong> ${usernameVal}</p>
             <p><strong>Access Type:</strong> ${accessTypeVal}</p>
             <p><strong>Approver:</strong> ${approverVal}</p>
         `;
-    
+
         if (accessType.value === 'team') {
-            summary += `<p><strong>Team Name:</strong> ${teamVal}</p>`;
+            summary += `<p><strong>Team Name:</strong> ${team.value.trim()}</p>`;
         } else {
             summary += `
-                <p><strong>Repository:</strong> ${repoVal}</p>
+                <p><strong>Repository:</strong> ${repo.value.trim()}</p>
                 <p><strong>Permission Level:</strong> ${permissionVal}</p>
                 <p><strong>Duration:</strong> ${durationVal} days</p>
             `;
         }
-    
+
         summary += `<p><strong>Justification:</strong> ${justificationVal}</p>`;
-    
+
         document.getElementById('summaryContent').innerHTML = summary;
         document.getElementById('summarySection').style.display = 'block';
         document.getElementById('reviewBtn').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'block';
         document.getElementById('backBtn').style.display = 'block';
-
-        console.log('Summary display should be block now');
     });
 
     document.getElementById('backBtn').addEventListener('click', function() {
@@ -659,41 +737,37 @@
         document.getElementById('submitBtn').style.display = 'none';
         document.getElementById('backBtn').style.display = 'none';
     });
+
     // ============================================================
-    // 9. Submit handler
-    // FIX: bound to the FORM's submit event (not the button's click
-    // event), so pressing Enter inside any field triggers this
-    // handler and gets preventDefault()'d too, instead of doing a
-    // native page reload.
+    // Submit handler (bound to form submit so Enter key works too)
     // ============================================================
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
         message.style.display = 'none';
         message.className = 'message';
-    
-        // Validate before submitting
+
         if (!validateAllFields()) {
             message.textContent = '❌ Please fix the errors above.';
             message.className = 'message error';
             message.style.display = 'block';
             return;
         }
-    
+
         const issueBody = buildIssueBody();
         const isTeam = accessType.value === 'team';
         const title = isTeam
             ? `[Team Request]: ${username.value.trim()} → ${team.value.trim()}`
             : `[Repo Request]: ${username.value.trim()} → ${repo.value.trim()}`;
-    
+
         const payload = {
             title: title,
             body: issueBody,
             labels: ['access-request', isTeam ? 'team-based' : 'repo-based']
         };
-    
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
-    
+
         try {
             const response = await fetch(
                 `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues`,
@@ -707,7 +781,7 @@
                     body: JSON.stringify(payload)
                 }
             );
-    
+
             if (response.ok) {
                 message.textContent = '✅ Request submitted successfully! You will be notified once approved.';
                 message.className = 'message success';
@@ -715,7 +789,6 @@
                 form.reset();
                 charCount.textContent = '0';
                 accessType.dispatchEvent(new Event('change'));
-
                 submitBtn.textContent = 'Submitted';
             } else {
                 const error = await response.json();
@@ -728,438 +801,13 @@
             message.className = 'message error';
             message.style.display = 'block';
         }
-        //  finally {
-        //     submitBtn.disabled = false;
-        //     submitBtn.textContent = 'Submit Request';
-        // }
     });
 
     // ============================================================
-    // 10. Initial state
+    // Initial state
     // ============================================================
     accessType.dispatchEvent(new Event('change'));
-
-    // ============================================================
-    // 11. Load teams and members (2 API calls per session)
-    // ============================================================
-    let allTeams = [];
-    let allMembers = [];
-    let allRepos = [];
-    let isLoading = true;
-
-    async function loadData() {
-        isLoading = true;
-        try {
-            console.log('Fetching teams, members, and repos...');
-     
-            // --- Fetch all teams (pagination) ---
-            allTeams = []; // 👈 Use global variable
-            let page = 1;
-            let hasMore = true;
-            let maxPage = 10;
-            while (hasMore && page <= maxPage) {
-                const res = await fetch(
-                    `https://api.github.com/orgs/${GITHUB_ORG}/teams?per_page=100&page=${page}`,
-                    {
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-                const data = await res.json();
-                if (data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allTeams = allTeams.concat(data);
-                    page++;
-                }
-            }
-     
-            // --- Fetch all members (pagination) ---
-            allMembers = []; // 👈 Use global variable
-            page = 1;
-            hasMore = true;
-            maxPage = 10;
-            while (hasMore && page <= maxPage) {
-                const res = await fetch(
-                    `https://api.github.com/orgs/${GITHUB_ORG}/members?per_page=100&page=${page}`,
-                    {
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-                const data = await res.json();
-                if (data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allMembers = allMembers.concat(data);
-                    page++;
-                }
-            }
-     
-            // --- Fetch all repos (pagination) ---
-            allRepos = []; // 👈 Use global variable
-            page = 1;
-            hasMore = true;
-            maxPage = 10;
-            while (hasMore && page <= maxPage) {
-                const res = await fetch(
-                    `https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100&page=${page}`,
-                    {
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    }
-                );
-                const data = await res.json();
-                if (data.length === 0) {
-                    hasMore = false;
-                } else {
-                    allRepos = allRepos.concat(data);
-                    page++;
-                }
-            }
-     
-            console.log('Teams loaded:', allTeams.length);
-            console.log('Members loaded:', allMembers.length);
-            console.log('Repos loaded:', allRepos.length);
-     
-            // Store everything
-            localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
-            localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
-            localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
-     
-        } catch (error) {
-            console.error('Error loading data:', error);
-            loadFromCache();
-        }
-        isLoading = false;
-    }
-
-    function loadFromCache() {
-        const cachedTeams = localStorage.getItem('cachedTeams');
-        const cachedMembers = localStorage.getItem('cachedMembers');
-        const cachedRepos = localStorage.getItem('cachedRepos');
-        if (cachedTeams) allTeams = JSON.parse(cachedTeams);
-        if (cachedMembers) allMembers = JSON.parse(cachedMembers);
-        if (cachedRepos) allRepos = JSON.parse(cachedRepos);
-    }
-
-    // ============================================================
-    // 12. Team: Read-only input with searchable dropdown
-    // (Now matches the username pattern exactly.)
-    // ============================================================
-    teamInput.addEventListener('click', function() {
-        teamDropdown.style.display = 'block';
-        teamSearch.value = '';
-        teamSearch.focus();
-     
-        if (isLoading) {
-            teamResults.innerHTML = '';
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'Loading teams...';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            teamResults.appendChild(item);
-            return;
-        }
-     
-        filterTeamResults('');
-    });
-     
-
-    teamSearch.addEventListener('input', function() {
-        filterTeamResults(this.value.trim().toLowerCase());
-    });
-
-    function filterTeamResults(query) {
-        teamResults.innerHTML = '';
-
-        const matches = allTeams
-            .filter(t => t.name.toLowerCase().includes(query))
-            .slice(0, 8);
-
-        if (matches.length === 0) {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'No matching teams found';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            teamResults.appendChild(item);
-            return;
-        }
-
-        matches.forEach(t => {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = t.name;
-            item.addEventListener('click', () => {
-                teamInput.value = t.name;
-                teamClear.style.display = 'inline';
-                teamDropdown.style.display = 'none';
-            });
-            teamResults.appendChild(item);
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (!teamInput.contains(e.target) && !teamDropdown.contains(e.target)) {
-            teamDropdown.style.display = 'none';
-        }
-    });
-
-    // ============================================================
-    // 13. Load data when page loads
-    // ============================================================
     loadData();
-
-    // ============================================================
-    // 14. Repository: Read-only input with searchable dropdown
-    // Same pattern as username/team. Uses full_name (owner/repo)
-    // since GitHub repo names alone aren't unique across an org's
-    // visible list once forks/mirrors are involved.
-    // ============================================================
-    repoInput.addEventListener('click', function() {
-        repoDropdown.style.display = 'block';
-        repoSearch.value = '';
-        repoSearch.focus();
-     
-        if (isLoading) {
-            repoResults.innerHTML = '';
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'Loading repositories...';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            repoResults.appendChild(item);
-            return;
-        }
-     
-        filterRepoResults('');
-    });
- 
-
-    repoSearch.addEventListener('input', function() {
-        filterRepoResults(this.value.trim().toLowerCase());
-    });
-
-    function filterRepoResults(query) {
-        repoResults.innerHTML = '';
-
-        const matches = allRepos
-            .filter(r => r.full_name.toLowerCase().includes(query))
-            .slice(0, 8);
-
-        if (matches.length === 0) {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'No matching repositories found';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            repoResults.appendChild(item);
-            return;
-        }
-
-        matches.forEach(r => {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = r.full_name;
-            item.addEventListener('click', () => {
-                repoInput.value = r.full_name;
-                repoClear.style.display = 'inline';
-                repoDropdown.style.display = 'none';
-            });
-            repoResults.appendChild(item);
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (!repoInput.contains(e.target) && !repoDropdown.contains(e.target)) {
-            repoDropdown.style.display = 'none';
-        }
-    });
-
-    // ============================================================
-    // 14. Username: Read-only input with searchable dropdown
-    // FIX: this is now the ONLY click handler on usernameInput.
-    // The old duplicate (former "section 12" in the original file)
-    // that called showUsernameDropdown() and wiped out this exact
-    // search box on every click has been removed entirely.
-    // ============================================================
-
-    // ============================================================
-    // Clear button functionality
-    // ============================================================
-     
-    // Username clear
-    usernameInput.addEventListener('change', function() {
-        usernameClear.style.display = this.value ? 'inline' : 'none';
-    });
-    usernameClear.addEventListener('click', function() {
-        usernameInput.value = '';
-        usernameClear.style.display = 'none';
-        usernameDropdown.style.display = 'none';
-    });
-     
-    // Team clear
-    teamInput.addEventListener('change', function() {
-        teamClear.style.display = this.value ? 'inline' : 'none';
-    });
-    teamClear.addEventListener('click', function() {
-        teamInput.value = '';
-        teamClear.style.display = 'none';
-        teamDropdown.style.display = 'none';
-    });
-     
-    // Repo clear
-    repoInput.addEventListener('change', function() {
-        repoClear.style.display = this.value ? 'inline' : 'none';
-    });
-    repoClear.addEventListener('click', function() {
-        repoInput.value = '';
-        repoClear.style.display = 'none';
-        repoDropdown.style.display = 'none';
-    });
-     
-    // Approver clear
-    approverInput.addEventListener('change', function() {
-        approverClear.style.display = this.value ? 'inline' : 'none';
-    });
-    approverClear.addEventListener('click', function() {
-        approverInput.value = '';
-        approverClear.style.display = 'none';
-        approverDropdown.style.display = 'none';
-    });
-        
-    usernameInput.addEventListener('click', function() {
-        usernameDropdown.style.display = 'block';
-        usernameSearch.value = '';
-        usernameSearch.focus();
-     
-        if (isLoading) {
-            usernameResults.innerHTML = '';
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'Loading users...';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            usernameResults.appendChild(item);
-            return;
-        }
-     
-        filterUsernameResults('');
-    });
-     
-
-    usernameSearch.addEventListener('input', function() {
-        filterUsernameResults(this.value.trim().toLowerCase());
-    });
-
-    function filterUsernameResults(query) {
-        usernameResults.innerHTML = '';
-
-        const matches = allMembers
-            .filter(m => m.login.toLowerCase().includes(query))
-            .slice(0, 8);
-
-        if (matches.length === 0) {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'No matching users found';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            usernameResults.appendChild(item);
-            return;
-        }
-
-        matches.forEach(m => {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = m.login;
-            item.addEventListener('click', () => {
-                usernameInput.value = m.login;
-                usernameClear.style.display = 'inline';
-                usernameDropdown.style.display = 'none';
-            });
-            usernameResults.appendChild(item);
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (!usernameInput.contains(e.target) && !usernameDropdown.contains(e.target)) {
-            usernameDropdown.style.display = 'none';
-        }
-    });
-
-    // ============================================================
-    // 15. Approver: Read-only input with searchable dropdown.
-    // Static list (APPROVERS array above) — no API fetch needed,
-    // so this works immediately on page load.
-    // ============================================================
-    approverInput.addEventListener('click', function() {
-        approverDropdown.style.display = 'block';
-        approverSearch.value = '';
-        approverSearch.focus();
-     
-        // No isLoading check needed for approver (it's a static list),
-        // but keep it consistent if you want.
-        if (isLoading) {
-            approverResults.innerHTML = '';
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'Loading approvers...';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            approverResults.appendChild(item);
-            return;
-        }
-     
-        filterApproverResults('');
-    });
-     
-
-    approverSearch.addEventListener('input', function() {
-        filterApproverResults(this.value.trim().toLowerCase());
-    });
-
-    function filterApproverResults(query) {
-        approverResults.innerHTML = '';
-
-        const matches = APPROVERS.filter(a => a.toLowerCase().includes(query));
-
-        if (matches.length === 0) {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = 'No matching approvers found';
-            item.style.color = '#888';
-            item.style.cursor = 'default';
-            approverResults.appendChild(item);
-            return;
-        }
-
-        matches.forEach(a => {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            item.textContent = a;
-            item.addEventListener('click', () => {
-                approverInput.value = a;
-                approverClear.style.display = 'inline';
-                approverDropdown.style.display = 'none';
-            });
-            approverResults.appendChild(item);
-        });
-    }
-
-    document.addEventListener('click', (e) => {
-        if (!approverInput.contains(e.target) && !approverDropdown.contains(e.target)) {
-            approverDropdown.style.display = 'none';
-        }
-    });
     </script>
 </body>
 </html>
