@@ -17,4 +17,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
         run: |
-          gh project item-add ${{ github.event.issue.node_id }} --project "PVT_kwDOEi48RM4BeAPn"
+          gh project item-add ${{ github.event.issue.number }} \
+            --url "${{ github.event.issue.html_url }}" \
+            --owner "pujaorg"
