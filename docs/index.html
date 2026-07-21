@@ -275,9 +275,7 @@
                     </div>
                     <div class="form-group">
                         <label for="duration">Duration (days) <span class="required">*</span></label>
-                        <input type="number" id="duration" min="1" max="30" value="7"
-                               onkeydown="return event.key !== 'e' && event.key !== 'E' && event.key !== '-' && event.key !== '+' && event.key !== '.'"
-                               oninput="if(this.value > 30) this.value = 30; if(this.value < 1) this.value = 1;" />
+                        <input type="number" id="duration" min="1" max="30" value="7"/>
                         <div id="durationFeedback" class="feedback"></div>
                     </div>
                 </div>
@@ -559,7 +557,6 @@
         }
         return true;
     }
- 
     // ============================================================
     // Combined validation — calls all individual validations
     // ============================================================
