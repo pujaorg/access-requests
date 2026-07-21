@@ -19,7 +19,7 @@ jobs:
  
       - name: Revoke expired access
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           REPO: ${{ github.repository }}
           ORG: ${{ github.repository_owner }}
         run: |
@@ -30,9 +30,11 @@ jobs:
  
           extract_value() {
             local field="$1" body="$2"
-            local temp="${body#*$field}"
-            local value=$(echo "$temp" | grep -v '^[[:space:]]*$' | head -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [[ "$value" == "---"* ]] || [[ "$value" == "###"* ]] && value=""
+            local value
+            value=$(echo "$body" | grep -A1 -F "$field" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ "$value" == "---"* || "$value" == "###"* ]]; then
+              value=""
+            fi
             echo "$value"
           }
  
@@ -41,31 +43,27 @@ jobs:
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
             echo "Removing $user from repo $repo"
  
-            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$repo/collaborators/$user"
+            if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
+              echo "✅ Collaborator removed"
+            else
+              echo "⚠️ Failed to remove collaborator (may already be removed, or PAT lacks admin rights on $repo)"
+            fi
  
-            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$REPO/issues/$issue/comments" \
-              -d "{\"body\": \"🔄 Access revoked from repo: $repo\"}"
- 
-            curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$REPO/issues/$issue" \
-              -d "{\"state\": \"closed\"}"
+            gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
+            gh issue close "$issue" --repo "$REPO"
           }
  
-          # Fetch open repo-based issues
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$REPO/issues?labels=access-request,repo-based&state=open&per_page=50" \
-            > issues.json
+          # Fetch ALL open repo-based issues (gh handles pagination automatically)
+          gh issue list --repo "$REPO" \
+            --label "access-request,repo-based" \
+            --state open \
+            --json number,body,labels \
+            --limit 1000 > issues.json
  
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "Current time (UTC): $CURRENT_TIME"
  
-          ISSUE_COUNT=$(cat issues.json | jq '. | length')
+          ISSUE_COUNT=$(jq 'length' issues.json)
           echo "Found $ISSUE_COUNT open repo-based issues."
  
           if [ "$ISSUE_COUNT" -eq 0 ]; then
@@ -73,18 +71,14 @@ jobs:
             exit 0
           fi
  
-          # Loop through each issue
-          for issue in $(cat issues.json | jq -r '.[] | @base64'); do
-            _jq() { echo ${issue} | base64 --decode | jq -r ${1}; }
- 
-            ISSUE_NUMBER=$(_jq '.number')
-            BODY=$(_jq '.body')
-            LABELS=$(_jq '.labels[].name')
+          jq -c '.[]' issues.json | while read -r issue; do
+            ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
+            BODY=$(echo "$issue" | jq -r '.body')
+            LABELS=$(echo "$issue" | jq -r '.labels[].name')
  
             echo "======================================"
             echo "📋 Processing issue #$ISSUE_NUMBER"
  
-            # Find the exact expiration label from the labels array
             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             echo "Expiration label found: '$EXPIRATION_LABEL'"
  
@@ -93,26 +87,33 @@ jobs:
               continue
             fi
  
-            # Extract just the date part from the label
-            EXPIRATION=$(echo "$EXPIRATION_LABEL" | sed 's/expires-//')
+            EXPIRATION=${EXPIRATION_LABEL#expires-}
             echo "Expiration date: $EXPIRATION"
  
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               echo "⏰ EXPIRED!"
  
-              # Delete the exact label found
-              echo "Deleting label: $EXPIRATION_LABEL"
-              DELETE_RESPONSE=$(curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/labels/$EXPIRATION_LABEL" \
-                -w "\n%{http_code}" 2>&1)
-              echo "Delete response: $DELETE_RESPONSE"
+              # gh CLI handles URL-encoding of the colons in the label name for us
+              echo "Removing label: $EXPIRATION_LABEL"
+              if gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "$EXPIRATION_LABEL"; then
+                echo "✅ Label removed"
+              else
+                echo "⚠️ Failed to remove label"
+              fi
  
-              USERNAME=$(extract_value "Your GitHub Username" "$BODY" || extract_value "GitHub Username" "$BODY")
-              REPO_NAME=$(extract_value "Repository Name" "$BODY" || extract_value "Repository" "$BODY")
+              USERNAME=$(extract_value "Your GitHub Username" "$BODY")
+              [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
+ 
+              REPO_NAME=$(extract_value "Repository Name" "$BODY")
+              [ -z "$REPO_NAME" ] && REPO_NAME=$(extract_value "Repository" "$BODY")
+ 
               echo "Username: $USERNAME"
               echo "Repo: $REPO_NAME"
+ 
+              if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
+                echo "⚠️ Could not parse username/repo from issue body — skipping revocation"
+                continue
+              fi
  
               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
             else
