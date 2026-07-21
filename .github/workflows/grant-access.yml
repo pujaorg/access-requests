@@ -194,8 +194,9 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          # Find the project item ID using a simpler query
           ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
+            query($org:String!,$projectNumber:Int!){
               organization(login:$org){
                 projectV2(number:$projectNumber){
                   items(first:100){
@@ -210,14 +211,16 @@ jobs:
                   }
                 }
               }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" \
-            --jq '.data.organization.projectV2.items.nodes[] | select(.content.number==$issueNumber) | .id')
+            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
-          if [ -z "$ITEM_ID" ]; then
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
             echo "::error::Issue not in project"
             exit 1
           fi
 
+          echo "Found ITEM_ID: $ITEM_ID"
+
+          # Move to Approved column
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -238,8 +241,9 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          # Find the project item ID
           ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
+            query($org:String!,$projectNumber:Int!){
               organization(login:$org){
                 projectV2(number:$projectNumber){
                   items(first:100){
@@ -254,17 +258,18 @@ jobs:
                   }
                 }
               }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" \
-            --jq '.data.organization.projectV2.items.nodes[] | select(.content.number==$issueNumber) | .id')
+            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
-          if [ -z "$ITEM_ID" ]; then
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
             echo "::error::Issue not in project"
             exit 1
           fi
 
+          # Check if expires label exists
           EXPIRES_LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name' | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
 
           if [ -n "$EXPIRES_LABEL" ]; then
+            echo "Moving to Pending Revocation"
             gh api graphql -f query='
               mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
                 updateProjectV2ItemFieldValue(input:{
@@ -286,8 +291,9 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          # Find the project item ID
           ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
+            query($org:String!,$projectNumber:Int!){
               organization(login:$org){
                 projectV2(number:$projectNumber){
                   items(first:100){
@@ -302,14 +308,14 @@ jobs:
                   }
                 }
               }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" \
-            --jq '.data.organization.projectV2.items.nodes[] | select(.content.number==$issueNumber) | .id')
+            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
-          if [ -z "$ITEM_ID" ]; then
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
             echo "::error::Issue not in project"
             exit 1
           fi
 
+          # Move to Workflow Failure
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
