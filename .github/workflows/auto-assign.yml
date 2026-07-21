@@ -1,4 +1,5 @@
 name: Auto-Assign Approvers
+run-name: Auto-Assign #${{ github.event.issue.number }}
  
 on:
   issues:
