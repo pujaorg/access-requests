@@ -11,7 +11,7 @@ jobs:
   assign:
     runs-on: ubuntu-latest
     steps:
-      - name: Get issue body
+      - name: Get issue details
         id: get_issue
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -25,16 +25,16 @@ jobs:
           echo "$ISSUE_BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
  
-      - name: Extract and assign approver
+      - name: Parse and assign approver
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           BODY: ${{ steps.get_issue.outputs.body }}
         run: |
-          # Extract approver (looks for "### Approver" followed by a username)
-          APPROVER=$(echo "$BODY" | grep -A 1 "### Approver" | tail -1 | xargs)
+          # Extract approver — look for "### Approver" followed by a value
+          APPROVER=$(echo "$BODY" | sed -n '/### Approver/,/^$/p' | grep -v '### Approver' | head -1 | xargs)
  
-          if [ -z "$APPROVER" ] || [ "$APPROVER" == "---" ]; then
+          if [ -z "$APPROVER" ]; then
             echo "No approver found — skipping"
             exit 0
           fi
