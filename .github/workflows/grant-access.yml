@@ -183,6 +183,7 @@ jobs:
       # ============================================================
       # 🚀 PROJECT BOARD AUTOMATION STEPS
       # ============================================================
+
       - name: Move to Approved column
         if: steps.check_grant.outputs.granted == 'true'
         env:
@@ -218,15 +219,16 @@ jobs:
 
           echo "Found ITEM_ID: $ITEM_ID"
 
+          # Pass column ID as a string inside the mutation
           gh api graphql -f query='
-            mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
+            mutation($project:ID!,$item:ID!,$field:ID!){
               updateProjectV2ItemFieldValue(input:{
                 projectId:$project
                 itemId:$item
                 fieldId:$field
-                value:{ singleSelectOptionId:$option }
+                value:{ singleSelectOptionId: "98236657" }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="98236657"
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID"
 
       - name: Move to Pending Revocation (repo-based)
         if: steps.check_grant.outputs.granted_type == 'repo' && steps.check_grant.outputs.granted == 'true'
@@ -266,14 +268,14 @@ jobs:
           if [ -n "$EXPIRES_LABEL" ]; then
             echo "Moving to Pending Revocation"
             gh api graphql -f query='
-              mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
+              mutation($project:ID!,$item:ID!,$field:ID!){
                 updateProjectV2ItemFieldValue(input:{
                   projectId:$project
                   itemId:$item
                   fieldId:$field
-                  value:{ singleSelectOptionId:$option }
+                  value:{ singleSelectOptionId: "0a2b6e2b" }
                 }){ projectV2Item { id } }
-              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="0a2b6e2b"
+              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID"
           fi
 
       - name: Move to Workflow Failure column
@@ -310,19 +312,14 @@ jobs:
           fi
 
           gh api graphql -f query='
-            mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
+            mutation($project:ID!,$item:ID!,$field:ID!){
               updateProjectV2ItemFieldValue(input:{
                 projectId:$project
                 itemId:$item
                 fieldId:$field
-                value:{ singleSelectOptionId:$option }
+                value:{ singleSelectOptionId: "8acc5108" }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="8acc5108"
-
-
-
-
-
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID"
 
 
 
