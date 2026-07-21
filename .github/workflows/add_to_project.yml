@@ -19,7 +19,11 @@ jobs:
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
         run: |
-          gh api graphql -f query='
+          echo "Adding issue to project..."
+          echo "PROJECT_ID: $PROJECT_ID"
+          echo "ISSUE_NODE_ID: $ISSUE_NODE_ID"
+
+          RESPONSE=$(gh api graphql -f query='
             mutation($project:ID!,$issue:ID!){
               addProjectV2ItemById(input:{
                 projectId:$project
@@ -29,4 +33,15 @@ jobs:
                   id
                 }
               }
-            }' -F project="$PROJECT_ID" -F issue="$ISSUE_NODE_ID"
+            }' -F project="$PROJECT_ID" -F issue="$ISSUE_NODE_ID")
+
+          echo "Response: $RESPONSE"
+
+          ITEM_ID=$(echo "$RESPONSE" | jq -r '.data.addProjectV2ItemById.item.id')
+
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
+            echo "::error::Failed to add issue to project"
+            exit 1
+          fi
+
+          echo "✅ Issue added to project with Item ID: $ITEM_ID"
