@@ -1,4 +1,5 @@
 name: Project Board Automation
+run-name: Project Automation #${{ github.event.issue.number }}
 
 on:
   issues:
