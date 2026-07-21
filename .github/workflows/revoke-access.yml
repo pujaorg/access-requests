@@ -45,10 +45,22 @@ jobs:
 
             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
               echo "✅ Collaborator removed"
-              return 0
             else
-              echo "❌ Failed to remove collaborator"
-              return 1
+              echo "⚠️ Failed to remove collaborator (may already be removed)"
+            fi
+
+            # Add comment
+            gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
+
+            # ✅ Close the issue
+            echo "Closing issue #$issue"
+            gh issue close "$issue" --repo "$REPO" --comment "Access revoked and issue closed."
+
+            # Delete the expiration label
+            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
+            if [ -n "$EXPIRATION_LABEL" ]; then
+              echo "Deleting label from repo: $EXPIRATION_LABEL"
+              gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes || echo "⚠️ Label already deleted"
             fi
           }
 
@@ -106,34 +118,7 @@ jobs:
                 continue
               fi
 
-              # Try to revoke
-              if revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"; then
-                echo "✅ Revocation successful"
-
-                # Delete the label from repo
-                echo "Deleting label from repo: $EXPIRATION_LABEL"
-                gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes || echo "⚠️ Label already deleted"
-
-                # Issue is closed by revoke_repo, project-automation will move to Completed
-              else
-                echo "❌ Revocation failed — moving to Workflow Failure column"
-
-                # Move to Workflow Failure column
-                gh api graphql -f query='
-                  mutation($project: ID!, $issue: ID!, $column: String!) {
-                    updateProjectV2ItemFieldValue(input: {
-                      projectId: $project
-                      itemId: $issue
-                      fieldId: "STATUS"
-                      value: { singleSelectOptionId: $column }
-                    }) {
-                      projectV2Item { id }
-                    }
-                  }' -F project="PVT_kwDOEi48RM4BeAPn" -F issue="$ISSUE_NUMBER" -F column="8acc5108"
-
-                # Add comment
-                gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "❌ Revocation failed. Please check manually."
-              fi
+              revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
             else
               echo "⏳ Not expired yet."
             fi
@@ -142,12 +127,6 @@ jobs:
           echo "======================================"
           echo "✅ Revocation complete!"
           echo "======================================"
-
-
-
-
-
-
 
 
 
