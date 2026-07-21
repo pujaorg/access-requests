@@ -2,7 +2,7 @@ name: Revoke Expired Access
  
 on:
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 9 * * *'   # Runs daily at 9 AM UTC
   workflow_dispatch:
  
 permissions:
@@ -26,6 +26,7 @@ jobs:
           set -e
           echo "Scanning for expired access..."
  
+          # Function to extract value from issue body
           extract_value() {
             local field="$1" body="$2"
             local temp="${body#*$field}"
@@ -34,50 +35,73 @@ jobs:
             echo "$value"
           }
  
+          # Function to revoke team access
           revoke_team() {
             local user="$1" team="$2" issue="$3"
             echo "Removing $user from team $team"
  
+            # Remove user from team
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/orgs/$ORG/teams/$team/memberships/$user"
  
+            # Add comment on issue
             curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue/comments" \
-              -d "{\"body\": \"Access revoked from team: $team\"}"
+              -d "{\"body\": \"🔄 Access revoked from team: $team\"}"
  
-            # 👇 CLOSE THE ISSUE AFTER REVOCATION
+            # Remove expiration label
+            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
+            if [ -n "$EXPIRATION_LABEL" ]; then
+              curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$REPO/issues/$issue/labels/$EXPIRATION_LABEL"
+            fi
+ 
+            # Close the issue
             curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue" \
               -d "{\"state\": \"closed\"}"
           }
  
+          # Function to revoke repo access
           revoke_repo() {
             local user="$1" repo="$2" issue="$3"
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
             echo "Removing $user from repo $repo"
  
+            # Remove user from repo
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$repo/collaborators/$user"
  
+            # Add comment on issue
             curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue/comments" \
-              -d "{\"body\": \"Access revoked from repo: $repo\"}"
+              -d "{\"body\": \"🔄 Access revoked from repo: $repo\"}"
  
-            # 👇 CLOSE THE ISSUE AFTER REVOCATION
+            # Remove expiration label
+            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
+            if [ -n "$EXPIRATION_LABEL" ]; then
+              curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$REPO/issues/$issue/labels/$EXPIRATION_LABEL"
+            fi
+ 
+            # Close the issue
             curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue" \
               -d "{\"state\": \"closed\"}"
           }
  
+          # Fetch all closed issues with access-request label
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$REPO/issues?state=closed&per_page=50" \
+            "https://api.github.com/repos/$REPO/issues?labels=access-request&state=closed&per_page=50" \
             > issues.json
  
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -89,13 +113,16 @@ jobs:
             BODY=$(_jq '.body')
             LABELS=$(_jq '.labels[].name')
  
+            # Skip if not team-based or repo-based
             if [[ ! "$LABELS" == *"team-based"* ]] && [[ ! "$LABELS" == *"repo-based"* ]]; then
               continue
             fi
  
+            # Extract expiration from labels
             EXPIRATION=$(echo "$LABELS" | grep -oP 'expires-\K[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             [[ -z "$EXPIRATION" ]] && continue
  
+            # Check if expired
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               USERNAME=$(extract_value "Your GitHub Username" "$BODY" || extract_value "GitHub Username" "$BODY")
  
