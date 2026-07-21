@@ -25,6 +25,7 @@ jobs:
         run: |
           set -e
           echo "Scanning for expired access..."
+ 
           extract_value() {
             local field="$1" body="$2"
             local temp="${body#*$field}"
@@ -32,46 +33,72 @@ jobs:
             [[ "$value" == "---"* ]] || [[ "$value" == "###"* ]] && value=""
             echo "$value"
           }
+ 
           revoke_team() {
             local user="$1" team="$2" issue="$3"
             echo "Removing $user from team $team"
+ 
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/orgs/$ORG/teams/$team/memberships/$user"
+ 
             curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue/comments" \
               -d "{\"body\": \"Access revoked from team: $team\"}"
+ 
+            # 👇 CLOSE THE ISSUE AFTER REVOCATION
+            curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$REPO/issues/$issue" \
+              -d "{\"state\": \"closed\"}"
           }
+ 
           revoke_repo() {
             local user="$1" repo="$2" issue="$3"
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
             echo "Removing $user from repo $repo"
+ 
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$repo/collaborators/$user"
+ 
             curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/$REPO/issues/$issue/comments" \
               -d "{\"body\": \"Access revoked from repo: $repo\"}"
+ 
+            # 👇 CLOSE THE ISSUE AFTER REVOCATION
+            curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$REPO/issues/$issue" \
+              -d "{\"state\": \"closed\"}"
           }
+ 
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/$REPO/issues?state=closed&per_page=50" \
             > issues.json
+ 
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+ 
           for issue in $(cat issues.json | jq -r '.[] | @base64'); do
             _jq() { echo ${issue} | base64 --decode | jq -r ${1}; }
+ 
             ISSUE_NUMBER=$(_jq '.number')
             BODY=$(_jq '.body')
             LABELS=$(_jq '.labels[].name')
+ 
             if [[ ! "$LABELS" == *"team-based"* ]] && [[ ! "$LABELS" == *"repo-based"* ]]; then
               continue
             fi
+ 
             EXPIRATION=$(echo "$LABELS" | grep -oP 'expires-\K[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             [[ -z "$EXPIRATION" ]] && continue
+ 
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               USERNAME=$(extract_value "Your GitHub Username" "$BODY" || extract_value "GitHub Username" "$BODY")
+ 
               if [[ "$LABELS" == *"team-based"* ]]; then
                 TEAM=$(extract_value "GitHub Team Name" "$BODY" || extract_value "Team Name" "$BODY")
                 revoke_team "$USERNAME" "$TEAM" "$ISSUE_NUMBER"
@@ -81,4 +108,5 @@ jobs:
               fi
             fi
           done
+ 
           echo "Revocation complete."
