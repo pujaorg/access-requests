@@ -13,6 +13,32 @@ jobs:
   move-issue:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug - List all columns
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
+        run: |
+          echo "Fetching column IDs..."
+          gh api graphql -f query='
+            query {
+              organization(login: "pujaorg") {
+                projectV2(number: 1) {
+                  fields(first: 20) {
+                    nodes {
+                      ... on ProjectV2SingleSelectField {
+                        id
+                        name
+                        options {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ' | jq '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | {fieldId: .id, options: .options}'
+
       - name: Move issue based on event
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
@@ -27,7 +53,6 @@ jobs:
           set -e
 
           # Column IDs
-          NEW_REQUESTS="f75ad846"
           UNDER_REVIEW="47fc9ee4"
           REJECTED="18d54346"
           COMPLETED="636d8cb2"
@@ -47,8 +72,9 @@ jobs:
           fi
 
           echo "Moving issue #$ISSUE_NUMBER to column: $COLUMN_ID"
+          echo "Using FIELD_ID: $FIELD_ID"
 
-          # Get the project item ID — fixed query (removed $issueNumber)
+          # Find the project item
           ITEM_ID=$(gh api graphql -f query='
             query($org:String!,$projectNumber:Int!){
               organization(login:$org){
@@ -74,6 +100,7 @@ jobs:
 
           echo "ITEM_ID: $ITEM_ID"
 
+          # Move the issue
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -82,6 +109,6 @@ jobs:
                 fieldId:$field
                 value:{ singleSelectOptionId:$option }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"$COLUMN_ID\""
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="$COLUMN_ID"
 
           echo "✅ Done"
