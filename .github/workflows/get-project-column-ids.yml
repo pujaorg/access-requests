@@ -1,18 +1,18 @@
 name: Get Column IDs
- 
+
 on:
   workflow_dispatch:
- 
+
 jobs:
   get-ids:
     runs-on: ubuntu-latest
     steps:
-      - name: Get project column IDs
+      - name: Get project and column IDs
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
         run: |
-          echo "Fetching column IDs..."
- 
+          echo "Fetching project and column IDs..."
+
           # Get project data
           gh api graphql -f query='
             query {
@@ -36,13 +36,19 @@ jobs:
               }
             }
           ' > output.json
- 
-          # Print the output
-          echo "===== PROJECT COLUMN IDs ====="
-          cat output.json
-          echo "=============================="
- 
-          # Extract and print each column ID
+
+          echo "======================================"
+          echo "📋 PROJECT ID (use this in workflows)"
+          echo "======================================"
+          cat output.json | jq -r '.data.organization.projectV2.id'
           echo ""
-          echo "===== COLUMN IDs (copy these) ====="
+
+          echo "======================================"
+          echo "📋 COLUMN IDs (copy these)"
+          echo "======================================"
           cat output.json | jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .options[] | "\(.name): \(.id)"'
+          
+          echo ""
+          echo "======================================"
+          echo "✅ Done!"
+          echo "======================================"
