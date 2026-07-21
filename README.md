@@ -35,3 +35,6 @@ Users request temporary access to GitHub teams or repositories via an issue. An 
 
 <img width="7288" height="3959" alt="deepseek_mermaid_1" src="https://github.com/user-attachments/assets/f36cf04e-3bd0-49b2-87e7-b3b3a3daabb7" />
 
+<img width="2316" height="3354" alt="deepseek_mermaid_2" src="https://github.com/user-attachments/assets/fdeb864f-dc29-4b81-87c5-454ad494cfe0" />
+
+
