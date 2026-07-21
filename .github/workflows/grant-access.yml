@@ -205,8 +205,8 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
             -d "{\"body\": \"$COMMENT\"}"
  
-      - name: Close issue
-        if: steps.check_grant.outputs.granted == 'true'
+      - name: Close issue (only for team-based)
+        if: success() && steps.parse.outputs.type == 'team'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -216,7 +216,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
             -d "{\"state\": \"closed\"}"
-      
+            
       - name: Comment on issue (failure)
         if: steps.check_grant.outputs.granted == 'false'
         env:
