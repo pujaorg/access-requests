@@ -1,22 +1,22 @@
 name: Revoke Expired Access
- 
+
 on:
   schedule:
     - cron: '0 9 * * *'
   workflow_dispatch:
- 
+
 permissions:
   contents: read
   issues: write
   actions: write
- 
+
 jobs:
   revoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
- 
+
       - name: Revoke expired access
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -27,7 +27,7 @@ jobs:
           echo "======================================"
           echo "🔍 Scanning for expired repo-based access..."
           echo "======================================"
- 
+
           extract_value() {
             local field="$1" body="$2"
             local value
@@ -37,90 +37,245 @@ jobs:
             fi
             echo "$value"
           }
- 
+
           revoke_repo() {
             local user="$1" repo="$2" issue="$3"
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
             echo "Removing $user from repo $repo"
- 
+
             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
               echo "✅ Collaborator removed"
+              return 0
             else
-              echo "⚠️ Failed to remove collaborator (may already be removed, or PAT lacks admin rights on $repo)"
+              echo "❌ Failed to remove collaborator"
+              return 1
             fi
- 
-            gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
-            gh issue close "$issue" --repo "$REPO"
           }
- 
-          # Fetch ALL open repo-based issues (gh handles pagination automatically)
+
+          # Fetch all open repo-based issues
           gh issue list --repo "$REPO" \
             --label "access-request,repo-based" \
             --state open \
             --json number,body,labels \
             --limit 1000 > issues.json
- 
+
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "Current time (UTC): $CURRENT_TIME"
- 
+
           ISSUE_COUNT=$(jq 'length' issues.json)
           echo "Found $ISSUE_COUNT open repo-based issues."
- 
+
           if [ "$ISSUE_COUNT" -eq 0 ]; then
             echo "No open repo-based issues found. Exiting."
             exit 0
           fi
- 
+
           jq -c '.[]' issues.json | while read -r issue; do
             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
             BODY=$(echo "$issue" | jq -r '.body')
             LABELS=$(echo "$issue" | jq -r '.labels[].name')
- 
+
             echo "======================================"
             echo "📋 Processing issue #$ISSUE_NUMBER"
- 
+
             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             echo "Expiration label found: '$EXPIRATION_LABEL'"
- 
+
             if [ -z "$EXPIRATION_LABEL" ]; then
               echo "⏭️ No expiration label found — skipping"
               continue
             fi
- 
+
             EXPIRATION=${EXPIRATION_LABEL#expires-}
             echo "Expiration date: $EXPIRATION"
- 
+
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               echo "⏰ EXPIRED!"
- 
+
               USERNAME=$(extract_value "Your GitHub Username" "$BODY")
               [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
- 
+
               REPO_NAME=$(extract_value "Repository Name" "$BODY")
               [ -z "$REPO_NAME" ] && REPO_NAME=$(extract_value "Repository" "$BODY")
- 
+
               echo "Username: $USERNAME"
               echo "Repo: $REPO_NAME"
- 
+
               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
                 echo "⚠️ Could not parse username/repo from issue body — skipping revocation"
                 continue
               fi
- 
-              revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
- 
-              # Delete the label from the repo's label list entirely (not just unlink it from the issue)
-              echo "Deleting label from repo: $EXPIRATION_LABEL"
-              if gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes; then
-                echo "✅ Label deleted from repo"
+
+              # Try to revoke
+              if revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"; then
+                echo "✅ Revocation successful"
+
+                # Delete the label from repo
+                echo "Deleting label from repo: $EXPIRATION_LABEL"
+                gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes || echo "⚠️ Label already deleted"
+
+                # Issue is closed by revoke_repo, project-automation will move to Completed
               else
-                echo "⚠️ Failed to delete label from repo (may already be gone)"
+                echo "❌ Revocation failed — moving to Workflow Failure column"
+
+                # Move to Workflow Failure column (ID: 8acc5108)
+                gh api graphql -f query='
+                  mutation($project: ID!, $issue: ID!, $column: String!) {
+                    updateProjectV2ItemFieldValue(input: {
+                      projectId: $project
+                      itemId: $issue
+                      fieldId: "STATUS"
+                      value: { singleSelectOptionId: $column }
+                    }) {
+                      projectV2Item { id }
+                    }
+                  }' -F project="PN_kwDO..." -F issue="$ISSUE_NUMBER" -F column="8acc5108"
+
+                # Add comment
+                gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "❌ Revocation failed. Please check manually."
               fi
             else
               echo "⏳ Not expired yet."
             fi
           done
- 
+
           echo "======================================"
           echo "✅ Revocation complete!"
           echo "======================================"
+
+
+
+
+
+
+
+
+
+
+
+# name: Revoke Expired Access
+ 
+# on:
+#   schedule:
+#     - cron: '0 9 * * *'
+#   workflow_dispatch:
+ 
+# permissions:
+#   contents: read
+#   issues: write
+#   actions: write
+ 
+# jobs:
+#   revoke:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+ 
+#       - name: Revoke expired access
+#         env:
+#           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+#           REPO: ${{ github.repository }}
+#           ORG: ${{ github.repository_owner }}
+#         run: |
+#           set -e
+#           echo "======================================"
+#           echo "🔍 Scanning for expired repo-based access..."
+#           echo "======================================"
+ 
+#           extract_value() {
+#             local field="$1" body="$2"
+#             local value
+#             value=$(echo "$body" | grep -A1 -F "$field" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+#             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
+#               value=""
+#             fi
+#             echo "$value"
+#           }
+ 
+#           revoke_repo() {
+#             local user="$1" repo="$2" issue="$3"
+#             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
+#             echo "Removing $user from repo $repo"
+ 
+#             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
+#               echo "✅ Collaborator removed"
+#             else
+#               echo "⚠️ Failed to remove collaborator (may already be removed, or PAT lacks admin rights on $repo)"
+#             fi
+ 
+#             gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
+#             gh issue close "$issue" --repo "$REPO"
+#           }
+ 
+#           # Fetch ALL open repo-based issues (gh handles pagination automatically)
+#           gh issue list --repo "$REPO" \
+#             --label "access-request,repo-based" \
+#             --state open \
+#             --json number,body,labels \
+#             --limit 1000 > issues.json
+ 
+#           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#           echo "Current time (UTC): $CURRENT_TIME"
+ 
+#           ISSUE_COUNT=$(jq 'length' issues.json)
+#           echo "Found $ISSUE_COUNT open repo-based issues."
+ 
+#           if [ "$ISSUE_COUNT" -eq 0 ]; then
+#             echo "No open repo-based issues found. Exiting."
+#             exit 0
+#           fi
+ 
+#           jq -c '.[]' issues.json | while read -r issue; do
+#             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
+#             BODY=$(echo "$issue" | jq -r '.body')
+#             LABELS=$(echo "$issue" | jq -r '.labels[].name')
+ 
+#             echo "======================================"
+#             echo "📋 Processing issue #$ISSUE_NUMBER"
+ 
+#             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
+#             echo "Expiration label found: '$EXPIRATION_LABEL'"
+ 
+#             if [ -z "$EXPIRATION_LABEL" ]; then
+#               echo "⏭️ No expiration label found — skipping"
+#               continue
+#             fi
+ 
+#             EXPIRATION=${EXPIRATION_LABEL#expires-}
+#             echo "Expiration date: $EXPIRATION"
+ 
+#             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
+#               echo "⏰ EXPIRED!"
+ 
+#               USERNAME=$(extract_value "Your GitHub Username" "$BODY")
+#               [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
+ 
+#               REPO_NAME=$(extract_value "Repository Name" "$BODY")
+#               [ -z "$REPO_NAME" ] && REPO_NAME=$(extract_value "Repository" "$BODY")
+ 
+#               echo "Username: $USERNAME"
+#               echo "Repo: $REPO_NAME"
+ 
+#               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
+#                 echo "⚠️ Could not parse username/repo from issue body — skipping revocation"
+#                 continue
+#               fi
+ 
+#               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
+ 
+#               # Delete the label from the repo's label list entirely (not just unlink it from the issue)
+#               echo "Deleting label from repo: $EXPIRATION_LABEL"
+#               if gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes; then
+#                 echo "✅ Label deleted from repo"
+#               else
+#                 echo "⚠️ Failed to delete label from repo (may already be gone)"
+#               fi
+#             else
+#               echo "⏳ Not expired yet."
+#             fi
+#           done
+ 
+#           echo "======================================"
+#           echo "✅ Revocation complete!"
+#           echo "======================================"
