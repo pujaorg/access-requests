@@ -194,7 +194,6 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # Find the project item ID using a simpler query
           ITEM_ID=$(gh api graphql -f query='
             query($org:String!,$projectNumber:Int!){
               organization(login:$org){
@@ -220,7 +219,6 @@ jobs:
 
           echo "Found ITEM_ID: $ITEM_ID"
 
-          # Move to Approved column
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -229,7 +227,7 @@ jobs:
                 fieldId:$field
                 value:{ singleSelectOptionId:$option }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="98236657"
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"98236657\""
 
       - name: Move to Pending Revocation (repo-based)
         if: steps.check_grant.outputs.granted_type == 'repo' && steps.check_grant.outputs.granted == 'true'
@@ -241,7 +239,6 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # Find the project item ID
           ITEM_ID=$(gh api graphql -f query='
             query($org:String!,$projectNumber:Int!){
               organization(login:$org){
@@ -265,7 +262,6 @@ jobs:
             exit 1
           fi
 
-          # Check if expires label exists
           EXPIRES_LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name' | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
 
           if [ -n "$EXPIRES_LABEL" ]; then
@@ -278,7 +274,7 @@ jobs:
                   fieldId:$field
                   value:{ singleSelectOptionId:$option }
                 }){ projectV2Item { id } }
-              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="0a2b6e2b"
+              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"0a2b6e2b\""
           fi
 
       - name: Move to Workflow Failure column
@@ -291,7 +287,6 @@ jobs:
           PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # Find the project item ID
           ITEM_ID=$(gh api graphql -f query='
             query($org:String!,$projectNumber:Int!){
               organization(login:$org){
@@ -315,7 +310,6 @@ jobs:
             exit 1
           fi
 
-          # Move to Workflow Failure
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -324,7 +318,7 @@ jobs:
                 fieldId:$field
                 value:{ singleSelectOptionId:$option }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="8acc5108"
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"8acc5108\""
 
       # ============================================================
       # 🔚 END PROJECT BOARD AUTOMATION
@@ -376,6 +370,13 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
             -d "{\"body\": \"$COMMENT\"}"
+
+
+
+
+
+
+
 
 
 
