@@ -2,7 +2,7 @@ name: Project Board Automation
 
 on:
   issues:
-    types: [opened, assigned, labeled, closed]
+    types: [opened, assigned, labeled, closed, unassigned]
 
 permissions:
   contents: read
@@ -17,6 +17,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
+          FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
           ISSUE_ID: ${{ github.event.issue.node_id }}
           LABEL: ${{ github.event.label.name }}
           ACTION: ${{ github.event.action }}
@@ -49,17 +50,17 @@ jobs:
             exit 0
           fi
 
-          # Move the issue
+          # Move the issue using the Status field ID
           gh api graphql -f query='
-            mutation($project: ID!, $issue: ID!, $column: String!) {
+            mutation($project: ID!, $issue: ID!, $field: ID!, $column: String!) {
               updateProjectV2ItemFieldValue(input: {
                 projectId: $project
                 itemId: $issue
-                fieldId: "STATUS"
+                fieldId: $field
                 value: { singleSelectOptionId: $column }
               }) {
                 projectV2Item { id }
               }
-            }' -F project="$PROJECT_ID" -F issue="$ISSUE_ID" -F column="$COLUMN_ID"
+            }' -F project="$PROJECT_ID" -F issue="$ISSUE_ID" -F field="$FIELD_ID" -F column="$COLUMN_ID"
 
           echo "✅ Issue moved to column"
