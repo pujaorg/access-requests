@@ -547,7 +547,7 @@
         if (accessType.value === 'repo') {
             const val = parseInt(duration.value);
             if (isNaN(val) || val < 1 || val > 30) {
-                durationFeedback.textContent = '❌ Duration must be between 1 and 30 days.';
+                durationFeedback.textContent = 'Duration must be between 1 and 30 days.';
                 durationFeedback.className = 'feedback error';
                 return false;
             }
