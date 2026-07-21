@@ -1,89 +1,139 @@
 name: Project Board Automation
-
+ 
 on:
   issues:
-    types: [opened, assigned, labeled, closed, unassigned]
-
+    types:
+      - opened
+      - assigned
+      - labeled
+      - closed
+      - unassigned
+ 
 permissions:
   contents: read
   issues: write
   repository-projects: write
-
+ 
 jobs:
   move-issue:
     runs-on: ubuntu-latest
+ 
     steps:
       - name: Move issue based on event
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
+ 
+          # Project information
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
+ 
+          # Organization & Project Number
+          ORG_NAME: "pujaorg"
+          PROJECT_NUMBER: "1"
+ 
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          LABEL: ${{ github.event.label.name }}
           ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+ 
         run: |
-          # Column IDs
+          set -e
+ 
+          # Status option IDs
           NEW_REQUESTS="f75ad846"
           UNDER_REVIEW="47fc9ee4"
           REJECTED="18d54346"
           COMPLETED="636d8cb2"
           NEEDS_INFO="73dc85f8"
-
-          # Determine which column to move to
+ 
+          # Decide target column
           if [[ "$ACTION" == "opened" ]]; then
             COLUMN_ID="$NEW_REQUESTS"
-            echo "New issue → New Requests"
+ 
           elif [[ "$ACTION" == "assigned" ]]; then
             COLUMN_ID="$UNDER_REVIEW"
-            echo "Issue assigned → Under Review"
-          elif [[ "$LABEL" == "denied" ]]; then
-            COLUMN_ID="$REJECTED"
-            echo "Denied label → Rejected"
-          elif [[ "$LABEL" == "needs-info" ]]; then
-            COLUMN_ID="$NEEDS_INFO"
-            echo "Needs Info label → Needs Info"
+ 
           elif [[ "$ACTION" == "closed" ]]; then
             COLUMN_ID="$COMPLETED"
-            echo "Issue closed → Completed"
+ 
+          elif [[ "$LABEL" == "denied" ]]; then
+            COLUMN_ID="$REJECTED"
+ 
+          elif [[ "$LABEL" == "needs-info" ]]; then
+            COLUMN_ID="$NEEDS_INFO"
+ 
           else
-            echo "No matching event — skipping"
+            echo "No matching rule for ACTION=$ACTION LABEL=$LABEL"
             exit 0
           fi
-
-          # Get the project item ID for this issue
-          echo "Looking up project item for issue #$ISSUE_NUMBER..."
-          ITEM_ID=$(gh api graphql -f query='
-            query($org: String!, $projectNumber: Int!, $issueNumber: Int!) {
-              organization(login: $org) {
-                projectV2(number: $projectNumber) {
-                  items(first: 1, filter: {issue: {number: $issueNumber}}) {
-                    nodes {
-                      id
+ 
+          echo "Moving issue #$ISSUE_NUMBER"
+          echo "Action: $ACTION"
+          echo "Label : $LABEL"
+          echo "Target Status ID: $COLUMN_ID"
+ 
+          ITEM_ID=""
+ 
+          # Retry because it can take a few seconds for the issue
+          # to appear in the project after creation.
+          for i in {1..10}; do
+ 
+            ITEM_ID=$(gh api graphql \
+              -f query='
+              query($org:String!,$projectNumber:Int!){
+                organization(login:$org){
+                  projectV2(number:$projectNumber){
+                    items(first:100){
+                      nodes{
+                        id
+                        content{
+                          ... on Issue{
+                            number
+                          }
+                        }
+                      }
                     }
                   }
                 }
-              }
-            }
-          ' -F org="pujaorg" -F projectNumber=1 -F issueNumber="$ISSUE_NUMBER" --jq '.data.organization.projectV2.items.nodes[0].id')
-
-          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
-            echo "⚠️ Could not find project item for issue #$ISSUE_NUMBER"
-            exit 0
+              }' \
+              -F org="$ORG_NAME" \
+              -F projectNumber="$PROJECT_NUMBER" \
+              --jq ".data.organization.projectV2.items.nodes[] | select(.content.number==$ISSUE_NUMBER) | .id")
+ 
+            if [[ -n "$ITEM_ID" ]]; then
+              echo "Found Project Item: $ITEM_ID"
+              break
+            fi
+ 
+            echo "Attempt $i: Issue not in project yet..."
+            sleep 3
+          done
+ 
+          if [[ -z "$ITEM_ID" ]]; then
+            echo "::error::Issue is not in the project."
+            exit 1
           fi
-
-          echo "Project item ID: $ITEM_ID"
-
-          # Move the issue using the Status field ID
-          gh api graphql -f query='
-            mutation($project: ID!, $item: ID!, $field: ID!, $column: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $project
-                itemId: $item
-                fieldId: $field
-                value: { singleSelectOptionId: $column }
-              }) {
-                projectV2Item { id }
+ 
+          gh api graphql \
+            -f query='
+            mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
+              updateProjectV2ItemFieldValue(
+                input:{
+                  projectId:$project
+                  itemId:$item
+                  fieldId:$field
+                  value:{
+                    singleSelectOptionId:$option
+                  }
+                }
+              ){
+                projectV2Item{
+                  id
+                }
               }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F column="$COLUMN_ID"
-
-          echo "✅ Issue moved to column"
+            }' \
+            -F project="$PROJECT_ID" \
+            -F item="$ITEM_ID" \
+            -F field="$FIELD_ID" \
+            -F option="$COLUMN_ID"
+ 
+          echo "Successfully updated project status."
