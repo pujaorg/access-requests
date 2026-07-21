@@ -18,6 +18,8 @@ jobs:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
+          ORG_NAME: "pujaorg"
+          PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
@@ -46,9 +48,9 @@ jobs:
 
           echo "Moving issue #$ISSUE_NUMBER to column: $COLUMN_ID"
 
-          # Get the project item ID
+          # Get the project item ID — fixed query (removed $issueNumber)
           ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
+            query($org:String!,$projectNumber:Int!){
               organization(login:$org){
                 projectV2(number:$projectNumber){
                   items(first:100){
@@ -63,9 +65,9 @@ jobs:
                   }
                 }
               }
-            }' -F org="pujaorg" -F projectNumber=1 -F issueNumber="$ISSUE_NUMBER" --jq '.data.organization.projectV2.items.nodes[] | select(.content.number == $issueNumber) | .id')
+            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
 
-          if [ -z "$ITEM_ID" ]; then
+          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
             echo "::error::Issue not in project"
             exit 1
           fi
