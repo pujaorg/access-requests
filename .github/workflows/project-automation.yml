@@ -2,12 +2,7 @@ name: Project Board Automation
 
 on:
   issues:
-    types:
-      - opened
-      - assigned
-      - labeled
-      - closed
-      - unassigned
+    types: [assigned, labeled, closed]
 
 permissions:
   contents: read
@@ -17,17 +12,13 @@ permissions:
 jobs:
   move-issue:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Add issue to project and move
+      - name: Move issue based on event
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
-          ORG_NAME: "pujaorg"
-          PROJECT_NUMBER: "1"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
         run: |
@@ -40,32 +31,22 @@ jobs:
           COMPLETED="636d8cb2"
           NEEDS_INFO="73dc85f8"
 
-          # Determine target column
-          if [[ "$ACTION" == "opened" ]]; then
-            COLUMN_ID="$NEW_REQUESTS"
-            echo "New issue → New Requests"
-          elif [[ "$ACTION" == "assigned" ]]; then
+          if [[ "$ACTION" == "assigned" ]]; then
             COLUMN_ID="$UNDER_REVIEW"
-            echo "Issue assigned → Under Review"
           elif [[ "$ACTION" == "closed" ]]; then
             COLUMN_ID="$COMPLETED"
-            echo "Issue closed → Completed"
           elif [[ "$LABEL" == "denied" ]]; then
             COLUMN_ID="$REJECTED"
-            echo "Denied label → Rejected"
           elif [[ "$LABEL" == "needs-info" ]]; then
             COLUMN_ID="$NEEDS_INFO"
-            echo "Needs Info label → Needs Info"
           else
-            echo "No matching rule for ACTION=$ACTION LABEL=$LABEL"
+            echo "No matching rule"
             exit 0
           fi
 
-          echo "Processing issue #$ISSUE_NUMBER"
-          echo "Target Status ID: $COLUMN_ID"
+          echo "Moving issue #$ISSUE_NUMBER to column: $COLUMN_ID"
 
-          # Step 1: Check if issue is already in the project
-          # Use the node ID directly to find the item
+          # Get the project item ID
           ITEM_ID=$(gh api graphql -f query='
             query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
               organization(login:$org){
@@ -82,36 +63,15 @@ jobs:
                   }
                 }
               }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" --jq '.data.organization.projectV2.items.nodes[] | select(.content.number == $issueNumber) | .id')
+            }' -F org="pujaorg" -F projectNumber=1 -F issueNumber="$ISSUE_NUMBER" --jq '.data.organization.projectV2.items.nodes[] | select(.content.number == $issueNumber) | .id')
 
-          # Step 2: If not found, add it to the project
-          if [[ -z "$ITEM_ID" ]] || [[ "$ITEM_ID" == "null" ]]; then
-            echo "Adding issue to project..."
-            ADD_RESPONSE=$(gh api graphql -f query='
-              mutation($project:ID!,$issue:ID!){
-                addProjectV2ItemById(input:{
-                  projectId:$project
-                  contentId:$issue
-                }){
-                  item{
-                    id
-                  }
-                }
-              }' -F project="$PROJECT_ID" -F issue="$ISSUE_NODE_ID")
-
-            # Extract the item ID from the response
-            ITEM_ID=$(echo "$ADD_RESPONSE" | jq -r '.data.addProjectV2ItemById.item.id')
-            echo "Added item with ID: $ITEM_ID"
-          fi
-
-          if [[ -z "$ITEM_ID" ]] || [[ "$ITEM_ID" == "null" ]]; then
-            echo "::error::Could not find or add issue to project"
+          if [ -z "$ITEM_ID" ]; then
+            echo "::error::Issue not in project"
             exit 1
           fi
 
           echo "ITEM_ID: $ITEM_ID"
 
-          # Step 3: Move to the correct column
           gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
               updateProjectV2ItemFieldValue(input:{
@@ -122,4 +82,4 @@ jobs:
               }){ projectV2Item { id } }
             }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"$COLUMN_ID\""
 
-          echo "✅ Successfully moved issue #$ISSUE_NUMBER to column"
+          echo "✅ Done"
