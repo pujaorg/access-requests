@@ -93,14 +93,6 @@ jobs:
             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
               echo "⏰ EXPIRED!"
  
-              # gh CLI handles URL-encoding of the colons in the label name for us
-              echo "Removing label: $EXPIRATION_LABEL"
-              if gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --remove-label "$EXPIRATION_LABEL"; then
-                echo "✅ Label removed"
-              else
-                echo "⚠️ Failed to remove label"
-              fi
- 
               USERNAME=$(extract_value "Your GitHub Username" "$BODY")
               [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
  
@@ -116,6 +108,14 @@ jobs:
               fi
  
               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
+ 
+              # Delete the label from the repo's label list entirely (not just unlink it from the issue)
+              echo "Deleting label from repo: $EXPIRATION_LABEL"
+              if gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes; then
+                echo "✅ Label deleted from repo"
+              else
+                echo "⚠️ Failed to delete label from repo (may already be gone)"
+              fi
             else
               echo "⏳ Not expired yet."
             fi
