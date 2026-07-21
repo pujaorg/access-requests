@@ -1,4 +1,5 @@
 name: Label Conflict Resolution
+run-name: Label Conflict #${{ github.event.issue.number }}
 
 on:
   issues:
