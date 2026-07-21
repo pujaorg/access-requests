@@ -118,7 +118,7 @@ jobs:
               else
                 echo "❌ Revocation failed — moving to Workflow Failure column"
 
-                # Move to Workflow Failure column (ID: 8acc5108)
+                # Move to Workflow Failure column
                 gh api graphql -f query='
                   mutation($project: ID!, $issue: ID!, $column: String!) {
                     updateProjectV2ItemFieldValue(input: {
@@ -129,7 +129,7 @@ jobs:
                     }) {
                       projectV2Item { id }
                     }
-                  }' -F project="PN_kwDO..." -F issue="$ISSUE_NUMBER" -F column="8acc5108"
+                  }' -F project="PVT_kwDOEi48RM4BeAPn" -F issue="$ISSUE_NUMBER" -F column="8acc5108"
 
                 # Add comment
                 gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "❌ Revocation failed. Please check manually."
