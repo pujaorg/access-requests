@@ -1,5 +1,5 @@
 name: Project Board Automation
-run-name: Project Automation #${{ github.event.issue.number }}
+run-name: Project Automation ${{ github.event.issue.number }}
 
 on:
   issues:
