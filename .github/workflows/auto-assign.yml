@@ -9,25 +9,38 @@ permissions:
  
 jobs:
   assign:
-    # Only run for access request issues
-    if: |
-      contains(github.event.issue.labels.*.name, 'team-based') ||
-      contains(github.event.issue.labels.*.name, 'repo-based') ||
-      contains(github.event.issue.labels.*.name, 'access-request')
     runs-on: ubuntu-latest
     steps:
-      - name: Auto-assign issue to approvers
+      - name: Get issue details
+        id: get_issue
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          APPROVERS="beep024"
-          # Convert comma-separated list to JSON array
-          ASSIGNEES=$(echo "$APPROVERS" | sed 's/,/","/g')
-          ASSIGNEES="[\"$ASSIGNEES\"]"
-          
+          # Get the issue body
+          ISSUE_BODY=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" | jq -r '.body')
+ 
+          # Extract the approver from the issue body
+          # The issue body has: "### Approver\nusername"
+          APPROVER=$(echo "$ISSUE_BODY" | grep -oP '(?<=### Approver\n).*' | head -1 | xargs)
+ 
+          echo "approver=$APPROVER" >> $GITHUB_OUTPUT
+ 
+      - name: Assign issue to approver
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          APPROVER: ${{ steps.get_issue.outputs.approver }}
+        run: |
+          if [ -z "$APPROVER" ]; then
+            echo "No approver found — skipping"
+            exit 0
+          fi
+ 
           curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees" \
-            -d "{\"assignees\": $ASSIGNEES}"
+            -d "{\"assignees\": [\"$APPROVER\"]}"
