@@ -1,5 +1,5 @@
 name: Project Board Automation
- 
+
 on:
   issues:
     types:
@@ -8,78 +8,79 @@ on:
       - labeled
       - closed
       - unassigned
- 
+
 permissions:
   contents: read
   issues: write
   repository-projects: write
- 
+
 jobs:
   move-issue:
     runs-on: ubuntu-latest
- 
+
     steps:
-      - name: Move issue based on event
+      - name: Add issue to project and move
         env:
           GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
- 
-          # Project information
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
- 
-          # Organization & Project Number
           ORG_NAME: "pujaorg"
           PROJECT_NUMBER: "1"
- 
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
- 
         run: |
           set -e
- 
-          # Status option IDs
+
+          # Column IDs
           NEW_REQUESTS="f75ad846"
           UNDER_REVIEW="47fc9ee4"
           REJECTED="18d54346"
           COMPLETED="636d8cb2"
           NEEDS_INFO="73dc85f8"
- 
-          # Decide target column
+
+          # Determine target column
           if [[ "$ACTION" == "opened" ]]; then
             COLUMN_ID="$NEW_REQUESTS"
- 
           elif [[ "$ACTION" == "assigned" ]]; then
             COLUMN_ID="$UNDER_REVIEW"
- 
           elif [[ "$ACTION" == "closed" ]]; then
             COLUMN_ID="$COMPLETED"
- 
           elif [[ "$LABEL" == "denied" ]]; then
             COLUMN_ID="$REJECTED"
- 
           elif [[ "$LABEL" == "needs-info" ]]; then
             COLUMN_ID="$NEEDS_INFO"
- 
           else
             echo "No matching rule for ACTION=$ACTION LABEL=$LABEL"
             exit 0
           fi
- 
+
           echo "Moving issue #$ISSUE_NUMBER"
           echo "Action: $ACTION"
           echo "Label : $LABEL"
           echo "Target Status ID: $COLUMN_ID"
- 
+
+          # Step 1: Add the issue to the project board
+          echo "Adding issue #$ISSUE_NUMBER to project..."
+
+          gh api graphql -f query='
+            mutation($project:ID!,$issue:ID!){
+              addProjectV2ItemById(input:{
+                projectId:$project
+                contentId:$issue
+              }){
+                item{
+                  id
+                }
+              }
+            }' -F project="$PROJECT_ID" -F issue="${{ github.event.issue.node_id }}"
+
+          # Step 2: Find the project item ID (with retries)
           ITEM_ID=""
- 
-          # Retry because it can take a few seconds for the issue
-          # to appear in the project after creation.
+
           for i in {1..10}; do
- 
-            ITEM_ID=$(gh api graphql \
-              -f query='
-              query($org:String!,$projectNumber:Int!){
+            ITEM_ID=$(gh api graphql -f query='
+              query($org:String!,$projectNumber:Int!,$issueNumber:Int!){
                 organization(login:$org){
                   projectV2(number:$projectNumber){
                     items(first:100){
@@ -94,46 +95,32 @@ jobs:
                     }
                   }
                 }
-              }' \
-              -F org="$ORG_NAME" \
-              -F projectNumber="$PROJECT_NUMBER" \
-              --jq ".data.organization.projectV2.items.nodes[] | select(.content.number==$ISSUE_NUMBER) | .id")
- 
+              }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" -F issueNumber="$ISSUE_NUMBER" \
+              --jq '.data.organization.projectV2.items.nodes[] | select(.content.number==$issueNumber) | .id')
+
             if [[ -n "$ITEM_ID" ]]; then
               echo "Found Project Item: $ITEM_ID"
               break
             fi
- 
+
             echo "Attempt $i: Issue not in project yet..."
-            sleep 3
+            sleep 2
           done
- 
+
           if [[ -z "$ITEM_ID" ]]; then
-            echo "::error::Issue is not in the project."
+            echo "::error::Issue could not be added to project"
             exit 1
           fi
- 
-          gh api graphql \
-            -f query='
+
+          # Step 3: Move to the correct column
+          gh api graphql -f query='
             mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){
-              updateProjectV2ItemFieldValue(
-                input:{
-                  projectId:$project
-                  itemId:$item
-                  fieldId:$field
-                  value:{
-                    singleSelectOptionId:$option
-                  }
-                }
-              ){
-                projectV2Item{
-                  id
-                }
-              }
-            }' \
-            -F project="$PROJECT_ID" \
-            -F item="$ITEM_ID" \
-            -F field="$FIELD_ID" \
-            -F option="$COLUMN_ID"
- 
-          echo "Successfully updated project status."
+              updateProjectV2ItemFieldValue(input:{
+                projectId:$project
+                itemId:$item
+                fieldId:$field
+                value:{ singleSelectOptionId:$option }
+              }){ projectV2Item { id } }
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="$COLUMN_ID"
+
+          echo "Successfully added and moved issue #$ISSUE_NUMBER"
