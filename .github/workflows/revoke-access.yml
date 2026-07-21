@@ -2,7 +2,7 @@ name: Revoke Expired Access
  
 on:
   schedule:
-    - cron: '0 9 * * *'   # Runs daily at 9 AM UTC
+    - cron: '0 9 * * *'
   workflow_dispatch:
  
 permissions:
@@ -61,9 +61,10 @@ jobs:
               -d "{\"state\": \"closed\"}"
           }
  
+          # 👇 CHANGED: state=open (not closed)
           curl -s -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$REPO/issues?labels=access-request,repo-based&state=closed&per_page=50" \
+            "https://api.github.com/repos/$REPO/issues?labels=access-request,repo-based&state=open&per_page=50" \
             > issues.json
  
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -86,3 +87,4 @@ jobs:
           done
  
           echo "Revocation complete."
+ 
