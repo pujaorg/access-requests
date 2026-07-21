@@ -183,7 +183,6 @@ jobs:
       # ============================================================
       # 🚀 PROJECT BOARD AUTOMATION STEPS
       # ============================================================
-
       - name: Move to Approved column
         if: steps.check_grant.outputs.granted == 'true'
         env:
@@ -227,7 +226,7 @@ jobs:
                 fieldId:$field
                 value:{ singleSelectOptionId:$option }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"98236657\""
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="98236657"
 
       - name: Move to Pending Revocation (repo-based)
         if: steps.check_grant.outputs.granted_type == 'repo' && steps.check_grant.outputs.granted == 'true'
@@ -274,7 +273,7 @@ jobs:
                   fieldId:$field
                   value:{ singleSelectOptionId:$option }
                 }){ projectV2Item { id } }
-              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"0a2b6e2b\""
+              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="0a2b6e2b"
           fi
 
       - name: Move to Workflow Failure column
@@ -318,61 +317,7 @@ jobs:
                 fieldId:$field
                 value:{ singleSelectOptionId:$option }
               }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="\"8acc5108\""
-
-      # ============================================================
-      # 🔚 END PROJECT BOARD AUTOMATION
-      # ============================================================
-
-      - name: Comment on issue
-        if: steps.check_grant.outputs.granted == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          USERNAME: ${{ steps.parse.outputs.username }}
-          TARGET: ${{ steps.check_grant.outputs.target }}
-          TYPE: ${{ steps.check_grant.outputs.granted_type }}
-          PERMISSION: ${{ steps.check_grant.outputs.permission }}
-          EXPIRATION: ${{ steps.expiration.outputs.expiration }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          if [ "$TYPE" == "team" ]; then
-            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Expires:** $EXPIRATION UTC\n- **Status:**  User has been added to the team."
-          else
-            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:**  Access has been granted."
-          fi
-          curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-            -d "{\"body\": \"$COMMENT\"}"
-
-      - name: Close issue (only for team-based)
-        if: success() && steps.parse.outputs.type == 'team'
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          curl -X PATCH \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
-            -d "{\"state\": \"closed\"}"
-            
-      - name: Comment on issue (failure)
-        if: steps.check_grant.outputs.granted == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          COMMENT=" **Access Not Granted!**\n\n- **Status:**  Access could not be granted. Please check the workflow logs for details."
-          curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-            -d "{\"body\": \"$COMMENT\"}"
-
-
-
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID" -F option="8acc5108"
 
 
 
