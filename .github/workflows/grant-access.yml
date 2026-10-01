@@ -62,39 +62,32 @@ jobs:
             [[ "$value" == "---"* ]] || [[ "$value" == "###"* ]] && value=""
             echo "$value"
           }
-          USERNAME=$(extract_value "Your GitHub Username" "$BODY") || $(extract_value "GitHub Username" "$BODY")
+          USERNAME=$(extract_value "GitHub Username" "$BODY")
           DURATION=$(extract_value "Duration" "$BODY")
-          UNIT=$(extract_value "Time Unit" "$BODY" || extract_value "Unit" "$BODY" || echo "Days")
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
-          echo "unit=$UNIT" >> $GITHUB_OUTPUT
           if [[ "$LABELS" == *"team-based"* ]]; then
-            TEAM=$(extract_value "GitHub Team Name" "$BODY") || $(extract_value "Team Name" "$BODY")
+            TEAM=$(extract_value "GitHub Team Name" "$BODY")
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
           elif [[ "$LABELS" == *"repo-based"* ]]; then
-            REPO=$(extract_value "Repository Name" "$BODY") || $(extract_value "Repository" "$BODY")
+            REPO=$(extract_value "Repository Name" "$BODY")
             [[ "$REPO" != *"/"* ]] && REPO="${{ github.repository_owner }}/$REPO"
-            PERMISSION=$(extract_value "Permission Level" "$BODY") || $(extract_value "Permission" "$BODY")
+            PERMISSION=$(extract_value "Permission Level" "$BODY")
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
             echo "type=repo" >> $GITHUB_OUTPUT
             echo "target=$REPO" >> $GITHUB_OUTPUT
             echo "permission=$PERMISSION_LOWER" >> $GITHUB_OUTPUT
           fi
-          
+         
       - name: Calculate expiration
         id: expiration
         run: |
           DURATION="${{ steps.parse.outputs.duration }}"
-          UNIT="${{ steps.parse.outputs.unit }}"
           if [ -z "$DURATION" ]; then
-            DURATION=5
-          fi 
-          if [ "$UNIT" == "Minutes" ]; then
-            EXPIRATION=$(date -u -d "+$DURATION minutes" +"%Y-%m-%dT%H:%M:%SZ")
-          else
-            EXPIRATION=$(date -u -d "+$DURATION days" +"%Y-%m-%dT%H:%M:%SZ")
+            DURATION=1
           fi
+          EXPIRATION=$(date -u -d "+$DURATION days" +"%Y-%m-%dT%H:%M:%SZ")
           echo "expiration=$EXPIRATION" >> $GITHUB_OUTPUT
           echo "Expiration: $EXPIRATION"
 
@@ -148,7 +141,7 @@ jobs:
           fi
 
       - name: Add expiration label
-        if: success()
+        if: steps.grant_repo.outputs.success == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
