@@ -29,16 +29,7 @@ Users request temporary access to GitHub teams or repositories via an issue. An 
 └── revoke-access.yml                # Revokes expired access daily
  
 ```
-## Complete flow
-
-<img width="1538" height="5388" alt="Media" src="https://github.com/user-attachments/assets/bf41e529-36ff-409a-9f66-bcb839786b00" />
-
-<img width="7288" height="3959" alt="deepseek_mermaid_1" src="https://github.com/user-attachments/assets/f36cf04e-3bd0-49b2-87e7-b3b3a3daabb7" />
-
-<img width="2316" height="3354" alt="deepseek_mermaid_2" src="https://github.com/user-attachments/assets/fdeb864f-dc29-4b81-87c5-454ad494cfe0" />
-
 ### label comflict.yml- 
-If approved exists
-      ↓
-Do not allow denied
+If approved exists -> 
+Do not allow denied &
 Do not allow needs-info
