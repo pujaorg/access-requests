@@ -37,4 +37,8 @@ Users request temporary access to GitHub teams or repositories via an issue. An 
 
 <img width="2316" height="3354" alt="deepseek_mermaid_2" src="https://github.com/user-attachments/assets/fdeb864f-dc29-4b81-87c5-454ad494cfe0" />
 
-
+### label comflict.yml- 
+If approved exists
+      ↓
+Do not allow denied
+Do not allow needs-info
