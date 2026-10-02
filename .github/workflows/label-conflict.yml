@@ -17,51 +17,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ADDED_LABEL: ${{ github.event.label.name }}
         run: |
-          # Get current labels
-          LABELS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+          LABELS=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" | jq -r '.labels[].name')
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" |
+            jq -r '.labels[].name')
 
-          # If approved is added, remove denied and needs-info
-          if [[ "$ADDED_LABEL" == "approved" ]]; then
-            if [[ "$LABELS" == *"denied"* ]]; then
-              echo "Removing 'denied' label..."
-              curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/denied"
-            fi
-            if [[ "$LABELS" == *"needs-info"* ]]; then
-              echo "Removing 'needs-info' label..."
-              curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/needs-info"
-            fi
-          fi
-
-          # If denied is added, check if approved exists
-          if [[ "$ADDED_LABEL" == "denied" ]]; then
-            if [[ "$LABELS" == *"approved"* ]]; then
-              echo "❌ 'approved' label already exists. Removing 'denied'..."
-              curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/denied"
-              echo "⚠️ Cannot add 'denied' when 'approved' is present."
-            fi
-          fi
-
-          # If needs-info is added, check if approved exists
-          if [[ "$ADDED_LABEL" == "needs-info" ]]; then
-            if [[ "$LABELS" == *"approved"* ]]; then
-              echo "❌ 'approved' label already exists. Removing 'needs-info'..."
-              curl -s -X DELETE \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/needs-info"
-              echo "⚠️ Cannot add 'needs-info' when 'approved' is present."
-            fi
+          if [[ "$LABELS" == *"approved"* ]]; then
+            for label in denied needs-info; do
+              if [[ "$LABELS" == *"$label"* ]]; then
+                echo "Removing '$label' because 'approved' is already present."
+                curl -s -X DELETE \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/$label"
+              fi
+            done
           fi
