@@ -33,21 +33,17 @@ jobs:
         run: |
           # Extract approver — look for "### Approver" followed by a value
           APPROVER=$(echo "$BODY" | sed -n '/### Approver/,/^$/p' | grep -v '### Approver' | head -1 | xargs)
-
           if [ -z "$APPROVER" ]; then
             echo "::error::No approver found in the issue body."
             exit 1
           fi
-
           echo "Assigning to: $APPROVER"
-
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees" \
             -d "{\"assignees\": [\"$APPROVER\"]}")
-
           if [ "$RESPONSE" -eq 201 ]; then
             echo "Successfully assigned approver: $APPROVER"
           else
