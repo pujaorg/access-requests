@@ -227,7 +227,9 @@ jobs:
               --state open \
               --label "$EXPIRATION_LABEL" \
               --json number,title \
-              --limit 1)
+              --limit 10 |
+              jq --arg current "$ISSUE_NUMBER" \
+                '[.[] | select((.number | tostring) != $current)]')
 
             OTHER_ISSUE_COUNT=$(echo "$OTHER_ISSUES" | jq 'length')
 
