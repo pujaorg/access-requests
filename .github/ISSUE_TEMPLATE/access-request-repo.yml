@@ -37,22 +37,22 @@ body:
   - type: input
     id: duration
     attributes:
-      label: Duration
+      label: Duration (days) 
       description: Enter the number of minutes or days you need access for
-      placeholder: e.g., 5 or 7
+      placeholder: e.g., 1 or 5
     validations:
       required: true
  
-  - type: dropdown
-    id: unit
-    attributes:
-      label: Time Unit
-      description: Choose whether the duration is in minutes or days
-      options:
-        - Minutes
-        - Days
-    validations:
-      required: true
+  # - type: dropdown
+  #   id: unit
+  #   attributes:
+  #     label: Time Unit
+  #     description: Choose whether the duration is in minutes or days
+  #     options:
+  #       - Minutes
+  #       - Days
+  #   validations:
+  #     required: true
  
   - type: textarea
     id: justification
