@@ -21,70 +21,94 @@ jobs:
           ORG: ${{ github.repository_owner }}
         run: |
           set -e
+
           FAILED=false
           RESPONSIBLE_USER="pujadas02"
+
           extract_value() {
             local field="$1" body="$2"
             local value
+
             value=$(echo "$body" |
               grep -A1 -F "$field" |
               tail -1 |
               sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
               value=""
             fi
+
             echo "$value"
           }
+
           report_error() {
             local issue="$1"
             local message="$2"
+
             FAILED=true
+
             echo "$message"
+
             if ! gh issue comment "$issue" --repo "$REPO" \
               --body "@$RESPONSIBLE_USER $message"; then
               echo "Failed to add error comment to issue #$issue"
             fi
           }
+
           revoke_repo() {
             local user="$1"
             local repo="$2"
+
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
+
             echo "Checking access for $user on repo $repo"
+
             RESPONSE=$(gh api -i "repos/$repo/collaborators/$user" 2>&1 || true)
             STATUS=$(echo "$RESPONSE" | grep -m1 '^HTTP/' | awk '{print $2}' || true)
+
             if [ "$STATUS" = "404" ]; then
               echo "User $user is already removed from repo $repo"
               return 2
             fi
+
             if [ "$STATUS" != "204" ] && [ "$STATUS" != "200" ]; then
               if [ -z "$STATUS" ]; then
                 echo "Could not determine collaborator status"
               else
                 echo "Failed to check collaborator status. HTTP code: $STATUS"
               fi
+
               return 1
             fi
+
             echo "User has access. Removing $user from repo $repo"
+
             RESPONSE=$(gh api -i \
               -X DELETE \
               "repos/$repo/collaborators/$user" \
               2>&1 || true)
+
             STATUS=$(echo "$RESPONSE" | grep -m1 '^HTTP/' | awk '{print $2}' || true)
+
             if [ "$STATUS" = "204" ]; then
               echo "Collaborator removed successfully"
               return 0
             fi
+
             if [ "$STATUS" = "404" ]; then
               echo "User $user is already removed from repo $repo"
               return 2
             fi
+
             if [ -z "$STATUS" ]; then
               echo "Failed to revoke collaborator access"
             else
               echo "Failed to revoke collaborator access. HTTP code: $STATUS"
             fi
+
             return 1
           }
+
           gh issue list --repo "$REPO" \
             --label "access-request,repo-based" \
             --state open \
@@ -93,59 +117,78 @@ jobs:
 
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "Current time (UTC): $CURRENT_TIME"
+
           ISSUE_COUNT=$(jq 'length' issues.json)
           echo "Found $ISSUE_COUNT open repo-based issues."
+
           if [ "$ISSUE_COUNT" -eq 0 ]; then
             echo "No open repo-based issues found. Exiting."
             exit 0
           fi
+
           while read -r issue; do
             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
             BODY=$(echo "$issue" | jq -r '.body')
             LABELS=$(echo "$issue" | jq -r '.labels[].name')
+
             echo "Processing issue #$ISSUE_NUMBER"
+
             EXPIRATION_LABELS=$(echo "$LABELS" |
               grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' || true)
+
             EXPIRATION_COUNT=$(printf '%s\n' "$EXPIRATION_LABELS" |
               grep -c . || true)
+
             echo "Expiration labels found: $EXPIRATION_COUNT"
+
             if [ "$EXPIRATION_COUNT" -eq 0 ]; then
               report_error "$ISSUE_NUMBER" \
                 "Expiration label not found. Access was not revoked. Please investigate."
               continue
             fi
+
             if [ "$EXPIRATION_COUNT" -gt 1 ]; then
               report_error "$ISSUE_NUMBER" \
                 "Multiple expiration labels found. Access was not revoked. Please investigate."
               continue
             fi
+
             EXPIRATION_LABEL="$EXPIRATION_LABELS"
             EXPIRATION=${EXPIRATION_LABEL#expires-}
+
             echo "Expiration label: $EXPIRATION_LABEL"
             echo "Expiration date: $EXPIRATION"
+
             if [[ "$CURRENT_TIME" < "$EXPIRATION" ]]; then
               echo "Not expired yet."
               continue
             fi
+
             echo "Access has expired."
+
             USERNAME=$(extract_value "GitHub Username" "$BODY")
             REPO_NAME=$(extract_value "Repository Name" "$BODY")
+
             echo "Username: $USERNAME"
             echo "Repo: $REPO_NAME"
+
             if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
               report_error "$ISSUE_NUMBER" \
                 "Could not determine the GitHub username or repository. Access was not revoked. Please investigate."
               continue
             fi
+
             set +e
             revoke_repo "$USERNAME" "$REPO_NAME"
             REVOKE_RESULT=$?
             set -e
+
             if [ "$REVOKE_RESULT" -eq 1 ]; then
               report_error "$ISSUE_NUMBER" \
                 "Failed to revoke access from repo: $REPO_NAME. Access was not revoked. Please investigate."
               continue
             fi
+
             if [ "$REVOKE_RESULT" -eq 2 ]; then
               echo "Access was already removed from repo: $REPO_NAME"
 
@@ -156,33 +199,284 @@ jobs:
               fi
             else
               echo "Access revoked from repo: $REPO_NAME"
+
               if ! gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
                 --body "Access revoked from repo: $REPO_NAME"; then
                 FAILED=true
                 echo "Failed to add revocation comment to issue #$ISSUE_NUMBER"
               fi
             fi
+
             echo "Removing expiration label from issue #$ISSUE_NUMBER"
+
             if ! gh issue edit "$ISSUE_NUMBER" \
               --repo "$REPO" \
               --remove-label "$EXPIRATION_LABEL"; then
+
               report_error "$ISSUE_NUMBER" \
-                "Access cleanup completed, but the expiration label could not be removed. Please investigate."
+                "Access cleanup completed, but the expiration label could not be removed from the issue. Please investigate."
               continue
             fi
-            echo "Expiration label removed."
+
+            echo "Expiration label removed from issue."
+
+            echo "Checking whether expiration label is used by another issue."
+
+            OTHER_ISSUES=$(gh issue list \
+              --repo "$REPO" \
+              --state all \
+              --label "$EXPIRATION_LABEL" \
+              --json number \
+              --limit 1)
+
+            OTHER_ISSUE_COUNT=$(echo "$OTHER_ISSUES" | jq 'length')
+
+            if [ "$OTHER_ISSUE_COUNT" -eq 0 ]; then
+              echo "No other issue is using $EXPIRATION_LABEL."
+
+              echo "Deleting repository label: $EXPIRATION_LABEL"
+
+              if ! gh label delete "$EXPIRATION_LABEL" \
+                --repo "$REPO" \
+                --yes; then
+
+                report_error "$ISSUE_NUMBER" \
+                  "Access was revoked and the expiration label was removed from the issue, but the repository label '$EXPIRATION_LABEL' could not be deleted. Please investigate."
+              else
+                echo "Repository label deleted: $EXPIRATION_LABEL"
+              fi
+            else
+              echo "Expiration label is still used by another issue. Keeping repository label."
+            fi
+
             echo "Closing issue #$ISSUE_NUMBER"
+
             if ! gh issue close "$ISSUE_NUMBER" \
               --repo "$REPO" \
               --comment "Access cleanup completed and issue closed."; then
+
               report_error "$ISSUE_NUMBER" \
                 "Access cleanup completed, but the issue could not be closed. Please investigate."
               continue
             fi
+
             echo "Issue #$ISSUE_NUMBER closed."
+
           done < <(jq -c '.[]' issues.json)
+
           if [ "$FAILED" = true ]; then
             echo "Revocation completed with errors."
             exit 1
           fi
+
           echo "Revocation complete."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# name: Revoke Expired Access
+
+# on:
+#   schedule:
+#     - cron: '0 9 * * *'
+#   workflow_dispatch:
+
+# permissions:
+#   contents: read
+#   issues: write
+
+# jobs:
+#   revoke:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Revoke expired access
+#         env:
+#           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+#           REPO: ${{ github.repository }}
+#           ORG: ${{ github.repository_owner }}
+#         run: |
+#           set -e
+#           FAILED=false
+#           RESPONSIBLE_USER="pujadas02"
+#           extract_value() {
+#             local field="$1" body="$2"
+#             local value
+#             value=$(echo "$body" |
+#               grep -A1 -F "$field" |
+#               tail -1 |
+#               sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+#             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
+#               value=""
+#             fi
+#             echo "$value"
+#           }
+#           report_error() {
+#             local issue="$1"
+#             local message="$2"
+#             FAILED=true
+#             echo "$message"
+#             if ! gh issue comment "$issue" --repo "$REPO" \
+#               --body "@$RESPONSIBLE_USER $message"; then
+#               echo "Failed to add error comment to issue #$issue"
+#             fi
+#           }
+#           revoke_repo() {
+#             local user="$1"
+#             local repo="$2"
+#             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
+#             echo "Checking access for $user on repo $repo"
+#             RESPONSE=$(gh api -i "repos/$repo/collaborators/$user" 2>&1 || true)
+#             STATUS=$(echo "$RESPONSE" | grep -m1 '^HTTP/' | awk '{print $2}' || true)
+#             if [ "$STATUS" = "404" ]; then
+#               echo "User $user is already removed from repo $repo"
+#               return 2
+#             fi
+#             if [ "$STATUS" != "204" ] && [ "$STATUS" != "200" ]; then
+#               if [ -z "$STATUS" ]; then
+#                 echo "Could not determine collaborator status"
+#               else
+#                 echo "Failed to check collaborator status. HTTP code: $STATUS"
+#               fi
+#               return 1
+#             fi
+#             echo "User has access. Removing $user from repo $repo"
+#             RESPONSE=$(gh api -i \
+#               -X DELETE \
+#               "repos/$repo/collaborators/$user" \
+#               2>&1 || true)
+#             STATUS=$(echo "$RESPONSE" | grep -m1 '^HTTP/' | awk '{print $2}' || true)
+#             if [ "$STATUS" = "204" ]; then
+#               echo "Collaborator removed successfully"
+#               return 0
+#             fi
+#             if [ "$STATUS" = "404" ]; then
+#               echo "User $user is already removed from repo $repo"
+#               return 2
+#             fi
+#             if [ -z "$STATUS" ]; then
+#               echo "Failed to revoke collaborator access"
+#             else
+#               echo "Failed to revoke collaborator access. HTTP code: $STATUS"
+#             fi
+#             return 1
+#           }
+#           gh issue list --repo "$REPO" \
+#             --label "access-request,repo-based" \
+#             --state open \
+#             --json number,body,labels \
+#             --limit 1000 > issues.json
+
+#           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+#           echo "Current time (UTC): $CURRENT_TIME"
+#           ISSUE_COUNT=$(jq 'length' issues.json)
+#           echo "Found $ISSUE_COUNT open repo-based issues."
+#           if [ "$ISSUE_COUNT" -eq 0 ]; then
+#             echo "No open repo-based issues found. Exiting."
+#             exit 0
+#           fi
+#           while read -r issue; do
+#             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
+#             BODY=$(echo "$issue" | jq -r '.body')
+#             LABELS=$(echo "$issue" | jq -r '.labels[].name')
+#             echo "Processing issue #$ISSUE_NUMBER"
+#             EXPIRATION_LABELS=$(echo "$LABELS" |
+#               grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' || true)
+#             EXPIRATION_COUNT=$(printf '%s\n' "$EXPIRATION_LABELS" |
+#               grep -c . || true)
+#             echo "Expiration labels found: $EXPIRATION_COUNT"
+#             if [ "$EXPIRATION_COUNT" -eq 0 ]; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Expiration label not found. Access was not revoked. Please investigate."
+#               continue
+#             fi
+#             if [ "$EXPIRATION_COUNT" -gt 1 ]; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Multiple expiration labels found. Access was not revoked. Please investigate."
+#               continue
+#             fi
+#             EXPIRATION_LABEL="$EXPIRATION_LABELS"
+#             EXPIRATION=${EXPIRATION_LABEL#expires-}
+#             echo "Expiration label: $EXPIRATION_LABEL"
+#             echo "Expiration date: $EXPIRATION"
+#             if [[ "$CURRENT_TIME" < "$EXPIRATION" ]]; then
+#               echo "Not expired yet."
+#               continue
+#             fi
+#             echo "Access has expired."
+#             USERNAME=$(extract_value "GitHub Username" "$BODY")
+#             REPO_NAME=$(extract_value "Repository Name" "$BODY")
+#             echo "Username: $USERNAME"
+#             echo "Repo: $REPO_NAME"
+#             if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Could not determine the GitHub username or repository. Access was not revoked. Please investigate."
+#               continue
+#             fi
+#             set +e
+#             revoke_repo "$USERNAME" "$REPO_NAME"
+#             REVOKE_RESULT=$?
+#             set -e
+#             if [ "$REVOKE_RESULT" -eq 1 ]; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Failed to revoke access from repo: $REPO_NAME. Access was not revoked. Please investigate."
+#               continue
+#             fi
+#             if [ "$REVOKE_RESULT" -eq 2 ]; then
+#               echo "Access was already removed from repo: $REPO_NAME"
+
+#               if ! gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+#                 --body "Access was already removed from repo: $REPO_NAME. No revocation was required."; then
+#                 FAILED=true
+#                 echo "Failed to add already-removed comment to issue #$ISSUE_NUMBER"
+#               fi
+#             else
+#               echo "Access revoked from repo: $REPO_NAME"
+#               if ! gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+#                 --body "Access revoked from repo: $REPO_NAME"; then
+#                 FAILED=true
+#                 echo "Failed to add revocation comment to issue #$ISSUE_NUMBER"
+#               fi
+#             fi
+#             echo "Removing expiration label from issue #$ISSUE_NUMBER"
+#             if ! gh issue edit "$ISSUE_NUMBER" \
+#               --repo "$REPO" \
+#               --remove-label "$EXPIRATION_LABEL"; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Access cleanup completed, but the expiration label could not be removed. Please investigate."
+#               continue
+#             fi
+#             echo "Expiration label removed."
+#             echo "Closing issue #$ISSUE_NUMBER"
+#             if ! gh issue close "$ISSUE_NUMBER" \
+#               --repo "$REPO" \
+#               --comment "Access cleanup completed and issue closed."; then
+#               report_error "$ISSUE_NUMBER" \
+#                 "Access cleanup completed, but the issue could not be closed. Please investigate."
+#               continue
+#             fi
+#             echo "Issue #$ISSUE_NUMBER closed."
+#           done < <(jq -c '.[]' issues.json)
+#           if [ "$FAILED" = true ]; then
+#             echo "Revocation completed with errors."
+#             exit 1
+#           fi
+#           echo "Revocation complete."
