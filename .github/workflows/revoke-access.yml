@@ -102,12 +102,13 @@ jobs:
 
               echo "Username: $USERNAME"
               echo "Repo: $REPO_NAME"
-
               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
-                echo "Could not parse username/repo from issue body — skipping revocation"
+                echo "Could not determine username or repository for issue #$ISSUE_NUMBER"
+                gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+                  --body "@$RESPONSIBLE_USER Could not determine the GitHub username or repository. Access was not revoked. Please investigate."
+                FAILED=true
                 continue
               fi
-
               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
             else
               echo "Not expired yet."
