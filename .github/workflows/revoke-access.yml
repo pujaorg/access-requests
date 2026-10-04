@@ -8,15 +8,11 @@ on:
 permissions:
   contents: read
   issues: write
-  actions: write
 
 jobs:
   revoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Revoke expired access
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -24,9 +20,8 @@ jobs:
           ORG: ${{ github.repository_owner }}
         run: |
           set -e
-          echo "======================================"
-          echo "🔍 Scanning for expired repo-based access..."
-          echo "======================================"
+          FAILED=false
+          RESPONSIBLE_USER="pujausername"
 
           extract_value() {
             local field="$1" body="$2"
@@ -44,27 +39,23 @@ jobs:
             echo "Removing $user from repo $repo"
 
             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
-              echo "✅ Collaborator removed"
+              echo "Collaborator removed"
             else
-              echo "⚠️ Failed to remove collaborator (may already be removed)"
+              echo "Failed to remove collaborator"
             fi
 
-            # Add comment
-            gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
+            gh issue comment "$issue" --repo "$REPO" --body "Access revoked from repo: $repo"
 
-            # ✅ Close the issue
             echo "Closing issue #$issue"
             gh issue close "$issue" --repo "$REPO" --comment "Access revoked and issue closed."
 
-            # Delete the expiration label
             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             if [ -n "$EXPIRATION_LABEL" ]; then
               echo "Deleting label from repo: $EXPIRATION_LABEL"
-              gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes || echo "⚠️ Label already deleted"
+              gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes || echo "Label already deleted"
             fi
           }
 
-          # Fetch all open repo-based issues
           gh issue list --repo "$REPO" \
             --label "access-request,repo-based" \
             --state open \
@@ -87,47 +78,40 @@ jobs:
             BODY=$(echo "$issue" | jq -r '.body')
             LABELS=$(echo "$issue" | jq -r '.labels[].name')
 
-            echo "======================================"
-            echo "📋 Processing issue #$ISSUE_NUMBER"
+            echo "Processing issue #$ISSUE_NUMBER"
 
             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
             echo "Expiration label found: '$EXPIRATION_LABEL'"
 
             if [ -z "$EXPIRATION_LABEL" ]; then
-              echo "⏭️ No expiration label found — skipping"
+              echo "No expiration label found — skipping"
               continue
             fi
 
             EXPIRATION=${EXPIRATION_LABEL#expires-}
             echo "Expiration date: $EXPIRATION"
 
-            if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
-              echo "⏰ EXPIRED!"
+            if [[ "$CURRENT_TIME" > "$EXPIRATION" || "$CURRENT_TIME" == "$EXPIRATION" ]]; then
+              echo "Expired"
 
-              USERNAME=$(extract_value "Your GitHub Username" "$BODY")
-              [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
-
+              USERNAME=$(extract_value "GitHub Username" "$BODY")
               REPO_NAME=$(extract_value "Repository Name" "$BODY")
-              [ -z "$REPO_NAME" ] && REPO_NAME=$(extract_value "Repository" "$BODY")
 
               echo "Username: $USERNAME"
               echo "Repo: $REPO_NAME"
 
               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
-                echo "⚠️ Could not parse username/repo from issue body — skipping revocation"
+                echo "Could not parse username/repo from issue body — skipping revocation"
                 continue
               fi
 
               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
             else
-              echo "⏳ Not expired yet."
+              echo "Not expired yet."
             fi
           done
 
-          echo "======================================"
-          echo "✅ Revocation complete!"
-          echo "======================================"
-
+          echo "Revocation complete."
 
 
 
