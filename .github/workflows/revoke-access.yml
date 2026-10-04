@@ -37,15 +37,17 @@ jobs:
             local user="$1" repo="$2" issue="$3"
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
             echo "Removing $user from repo $repo"
-
             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
               echo "Collaborator removed"
             else
               echo "Failed to remove collaborator"
+              gh issue comment "$issue" --repo "$REPO" \
+                --body "@$RESPONSIBLE_USER Failed to revoke access from repo: $repo. Access was not revoked. Please investigate."
+              FAILED=true
+              return
             fi
-
+            
             gh issue comment "$issue" --repo "$REPO" --body "Access revoked from repo: $repo"
-
             echo "Closing issue #$issue"
             gh issue close "$issue" --repo "$REPO" --comment "Access revoked and issue closed."
 
