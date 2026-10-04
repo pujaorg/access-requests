@@ -221,14 +221,12 @@ jobs:
             echo "Expiration label removed from issue."
 
             echo "Checking whether expiration label is used by another issue."
-
             OTHER_ISSUES=$(gh issue list \
               --repo "$REPO" \
-              --state all \
+              --state open \
               --label "$EXPIRATION_LABEL" \
               --json number \
               --limit 1)
-
             OTHER_ISSUE_COUNT=$(echo "$OTHER_ISSUES" | jq 'length')
 
             if [ "$OTHER_ISSUE_COUNT" -eq 0 ]; then
