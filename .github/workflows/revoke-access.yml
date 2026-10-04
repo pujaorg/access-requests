@@ -27,38 +27,40 @@ jobs:
             local field="$1" body="$2"
             local value
             value=$(echo "$body" | grep -A1 -F "$field" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
               value=""
             fi
+
             echo "$value"
           }
 
           revoke_repo() {
             local user="$1" repo="$2" issue="$3"
+
             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
+
             echo "Removing $user from repo $repo"
+
             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
               echo "Collaborator removed"
             else
               echo "Failed to remove collaborator"
+
               gh issue comment "$issue" --repo "$REPO" \
                 --body "@$RESPONSIBLE_USER Failed to revoke access from repo: $repo. Access was not revoked. Please investigate."
+
               FAILED=true
               return
             fi
-            
-            gh issue comment "$issue" --repo "$REPO" --body "Access revoked from repo: $repo"
-            echo "Closing issue #$issue"
-            gh issue close "$issue" --repo "$REPO" --comment "Access revoked and issue closed."
 
-            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
-            if [ -z "$EXPIRATION_LABEL" ]; then
-              echo "No expiration label found for issue #$ISSUE_NUMBER"
-              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
-                --body "@$RESPONSIBLE_USER Expiration label not found. Access was not revoked. Please investigate."
-              FAILED=true
-              continue
-            fi
+            gh issue comment "$issue" --repo "$REPO" \
+              --body "Access revoked from repo: $repo"
+
+            echo "Closing issue #$issue"
+
+            gh issue close "$issue" --repo "$REPO" \
+              --comment "Access revoked and issue closed."
           }
 
           gh issue list --repo "$REPO" \
@@ -78,22 +80,46 @@ jobs:
             exit 0
           fi
 
-          jq -c '.[]' issues.json | while read -r issue; do
+          while read -r issue; do
             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
             BODY=$(echo "$issue" | jq -r '.body')
             LABELS=$(echo "$issue" | jq -r '.labels[].name')
 
             echo "Processing issue #$ISSUE_NUMBER"
 
-            EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
-            echo "Expiration label found: '$EXPIRATION_LABEL'"
+            EXPIRATION_LABELS=$(echo "$LABELS" |
+              grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' || true)
 
-            if [ -z "$EXPIRATION_LABEL" ]; then
-              echo "No expiration label found — skipping"
+            EXPIRATION_COUNT=$(printf '%s\n' "$EXPIRATION_LABELS" | grep -c . || true)
+
+            echo "Expiration labels found: $EXPIRATION_COUNT"
+
+            if [ "$EXPIRATION_COUNT" -eq 0 ]; then
+              echo "No expiration label found for issue #$ISSUE_NUMBER"
+
+              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+                --body "@$RESPONSIBLE_USER Expiration label not found. Access was not revoked. Please investigate."
+
+              FAILED=true
               continue
             fi
 
+            if [ "$EXPIRATION_COUNT" -gt 1 ]; then
+              echo "Multiple expiration labels found for issue #$ISSUE_NUMBER"
+
+              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
+                --body "@$RESPONSIBLE_USER Multiple expiration labels found. Access was not revoked. Please investigate."
+
+              FAILED=true
+              continue
+            fi
+
+            EXPIRATION_LABEL="$EXPIRATION_LABELS"
+
+            echo "Expiration label found: '$EXPIRATION_LABEL'"
+
             EXPIRATION=${EXPIRATION_LABEL#expires-}
+
             echo "Expiration date: $EXPIRATION"
 
             if [[ "$CURRENT_TIME" > "$EXPIRATION" || "$CURRENT_TIME" == "$EXPIRATION" ]]; then
@@ -104,147 +130,21 @@ jobs:
 
               echo "Username: $USERNAME"
               echo "Repo: $REPO_NAME"
+
               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
                 echo "Could not determine username or repository for issue #$ISSUE_NUMBER"
+
                 gh issue comment "$ISSUE_NUMBER" --repo "$REPO" \
                   --body "@$RESPONSIBLE_USER Could not determine the GitHub username or repository. Access was not revoked. Please investigate."
+
                 FAILED=true
                 continue
               fi
+
               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
             else
               echo "Not expired yet."
             fi
-          done
+          done < <(jq -c '.[]' issues.json)
 
           echo "Revocation complete."
-
-
-
-
-# name: Revoke Expired Access
- 
-# on:
-#   schedule:
-#     - cron: '0 9 * * *'
-#   workflow_dispatch:
- 
-# permissions:
-#   contents: read
-#   issues: write
-#   actions: write
- 
-# jobs:
-#   revoke:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
- 
-#       - name: Revoke expired access
-#         env:
-#           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-#           REPO: ${{ github.repository }}
-#           ORG: ${{ github.repository_owner }}
-#         run: |
-#           set -e
-#           echo "======================================"
-#           echo "🔍 Scanning for expired repo-based access..."
-#           echo "======================================"
- 
-#           extract_value() {
-#             local field="$1" body="$2"
-#             local value
-#             value=$(echo "$body" | grep -A1 -F "$field" | tail -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-#             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
-#               value=""
-#             fi
-#             echo "$value"
-#           }
- 
-#           revoke_repo() {
-#             local user="$1" repo="$2" issue="$3"
-#             [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
-#             echo "Removing $user from repo $repo"
- 
-#             if gh api -X DELETE "repos/$repo/collaborators/$user" --silent; then
-#               echo "✅ Collaborator removed"
-#             else
-#               echo "⚠️ Failed to remove collaborator (may already be removed, or PAT lacks admin rights on $repo)"
-#             fi
- 
-#             gh issue comment "$issue" --repo "$REPO" --body "🔄 Access revoked from repo: $repo"
-#             gh issue close "$issue" --repo "$REPO"
-#           }
- 
-#           # Fetch ALL open repo-based issues (gh handles pagination automatically)
-#           gh issue list --repo "$REPO" \
-#             --label "access-request,repo-based" \
-#             --state open \
-#             --json number,body,labels \
-#             --limit 1000 > issues.json
- 
-#           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-#           echo "Current time (UTC): $CURRENT_TIME"
- 
-#           ISSUE_COUNT=$(jq 'length' issues.json)
-#           echo "Found $ISSUE_COUNT open repo-based issues."
- 
-#           if [ "$ISSUE_COUNT" -eq 0 ]; then
-#             echo "No open repo-based issues found. Exiting."
-#             exit 0
-#           fi
- 
-#           jq -c '.[]' issues.json | while read -r issue; do
-#             ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
-#             BODY=$(echo "$issue" | jq -r '.body')
-#             LABELS=$(echo "$issue" | jq -r '.labels[].name')
- 
-#             echo "======================================"
-#             echo "📋 Processing issue #$ISSUE_NUMBER"
- 
-#             EXPIRATION_LABEL=$(echo "$LABELS" | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
-#             echo "Expiration label found: '$EXPIRATION_LABEL'"
- 
-#             if [ -z "$EXPIRATION_LABEL" ]; then
-#               echo "⏭️ No expiration label found — skipping"
-#               continue
-#             fi
- 
-#             EXPIRATION=${EXPIRATION_LABEL#expires-}
-#             echo "Expiration date: $EXPIRATION"
- 
-#             if [[ "$CURRENT_TIME" > "$EXPIRATION" ]]; then
-#               echo "⏰ EXPIRED!"
- 
-#               USERNAME=$(extract_value "Your GitHub Username" "$BODY")
-#               [ -z "$USERNAME" ] && USERNAME=$(extract_value "GitHub Username" "$BODY")
- 
-#               REPO_NAME=$(extract_value "Repository Name" "$BODY")
-#               [ -z "$REPO_NAME" ] && REPO_NAME=$(extract_value "Repository" "$BODY")
- 
-#               echo "Username: $USERNAME"
-#               echo "Repo: $REPO_NAME"
- 
-#               if [ -z "$USERNAME" ] || [ -z "$REPO_NAME" ]; then
-#                 echo "⚠️ Could not parse username/repo from issue body — skipping revocation"
-#                 continue
-#               fi
- 
-#               revoke_repo "$USERNAME" "$REPO_NAME" "$ISSUE_NUMBER"
- 
-#               # Delete the label from the repo's label list entirely (not just unlink it from the issue)
-#               echo "Deleting label from repo: $EXPIRATION_LABEL"
-#               if gh label delete "$EXPIRATION_LABEL" --repo "$REPO" --yes; then
-#                 echo "✅ Label deleted from repo"
-#               else
-#                 echo "⚠️ Failed to delete label from repo (may already be gone)"
-#               fi
-#             else
-#               echo "⏳ Not expired yet."
-#             fi
-#           done
- 
-#           echo "======================================"
-#           echo "✅ Revocation complete!"
-#           echo "======================================"
