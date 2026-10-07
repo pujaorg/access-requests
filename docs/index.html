@@ -705,25 +705,34 @@
         const justificationVal = justification.value.trim();
         const approverVal = approver.value.trim();
 
-        let summary = `
-            <p><strong>GitHub Username:</strong> ${usernameVal}</p>
-            <p><strong>Access Type:</strong> ${accessTypeVal}</p>
-            <p><strong>Approver:</strong> ${approverVal}</p>
-        `;
+ const summaryContent = document.getElementById('summaryContent');
+summaryContent.innerHTML = '';
 
-        if (accessType.value === 'team') {
-            summary += `<p><strong>Team Name:</strong> ${team.value.trim()}</p>`;
-        } else {
-            summary += `
-                <p><strong>Repository:</strong> ${repo.value.trim()}</p>
-                <p><strong>Permission Level:</strong> ${permissionVal}</p>
-                <p><strong>Duration:</strong> ${durationVal} days</p>
-            `;
-        }
+function addSummaryRow(label, value) {
+    const p = document.createElement('p');
 
-        summary += `<p><strong>Justification:</strong> ${justificationVal}</p>`;
+    const strong = document.createElement('strong');
+    strong.textContent = `${label}: `;
 
-        document.getElementById('summaryContent').innerHTML = summary;
+    p.appendChild(strong);
+    p.appendChild(document.createTextNode(value));
+
+    summaryContent.appendChild(p);
+}
+
+addSummaryRow('GitHub Username', usernameVal);
+addSummaryRow('Access Type', accessTypeVal);
+addSummaryRow('Approver', approverVal);
+
+if (accessType.value === 'team') {
+    addSummaryRow('Team Name', team.value.trim());
+} else {
+    addSummaryRow('Repository', repo.value.trim());
+    addSummaryRow('Permission Level', permissionVal);
+    addSummaryRow('Duration', `${durationVal} days`);
+}
+
+addSummaryRow('Justification', justificationVal);
         document.getElementById('summarySection').style.display = 'block';
         document.getElementById('reviewBtn').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'block';
