@@ -370,16 +370,22 @@
     async function fetchAllPages(url) {
         let results = [];
         let page = 1;
-        const maxPage = 10;
         let hasMore = true;
-        while (hasMore && page <= maxPage) {
+
+        while (hasMore) {
             const res = await fetch(`${url}?per_page=100&page=${page}`, {
                 headers: {
                     'Authorization': `token ${GITHUB_TOKEN}`,
                     'Accept': 'application/vnd.github.v3+json'
                 }
             });
+
+            if (!res.ok) {
+                throw new Error(`GitHub API request failed: ${res.status} ${res.statusText}`);
+            }
+
             const data = await res.json();
+
             if (!data.length) {
                 hasMore = false;
             } else {
@@ -387,40 +393,43 @@
                 page++;
             }
         }
+
         return results;
     }
 
     async function loadData() {
         isLoading = true;
+
         try {
             console.log('Fetching teams, members, and repos...');
-            [allTeams, allMembers, allRepos] = await Promise.all([
+
+            const [teams, members, repos] = await Promise.all([
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/teams`),
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/members`),
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/repos`)
             ]);
 
+            allTeams = teams;
+            allMembers = members;
+            allRepos = repos;
+
             console.log('Teams loaded:', allTeams.length);
             console.log('Members loaded:', allMembers.length);
             console.log('Repos loaded:', allRepos.length);
 
-            localStorage.setItem('cachedTeams', JSON.stringify(allTeams));
-            localStorage.setItem('cachedMembers', JSON.stringify(allMembers));
-            localStorage.setItem('cachedRepos', JSON.stringify(allRepos));
         } catch (error) {
             console.error('Error loading data:', error);
-            loadFromCache();
-        }
-        isLoading = false;
-    }
 
-    function loadFromCache() {
-        const cachedTeams = localStorage.getItem('cachedTeams');
-        const cachedMembers = localStorage.getItem('cachedMembers');
-        const cachedRepos = localStorage.getItem('cachedRepos');
-        if (cachedTeams) allTeams = JSON.parse(cachedTeams);
-        if (cachedMembers) allMembers = JSON.parse(cachedMembers);
-        if (cachedRepos) allRepos = JSON.parse(cachedRepos);
+            if (allTeams.length || allMembers.length || allRepos.length) {
+                console.log('Using data already loaded during this session.');
+            } else {
+                message.textContent = 'Unable to load current GitHub data.';
+                message.className = 'message error';
+                message.style.display = 'block';
+            }
+        }
+
+        isLoading = false;
     }
 
     // ============================================================
@@ -682,34 +691,35 @@
         const justificationVal = justification.value.trim();
         const approverVal = approver.value.trim();
 
- const summaryContent = document.getElementById('summaryContent');
-summaryContent.innerHTML = '';
+        const summaryContent = document.getElementById('summaryContent');
+        summaryContent.innerHTML = '';
 
-function addSummaryRow(label, value) {
-    const p = document.createElement('p');
+        function addSummaryRow(label, value) {
+            const p = document.createElement('p');
 
-    const strong = document.createElement('strong');
-    strong.textContent = `${label}: `;
+            const strong = document.createElement('strong');
+            strong.textContent = `${label}: `;
 
-    p.appendChild(strong);
-    p.appendChild(document.createTextNode(value));
+            p.appendChild(strong);
+            p.appendChild(document.createTextNode(value));
 
-    summaryContent.appendChild(p);
-}
+            summaryContent.appendChild(p);
+        }
 
-addSummaryRow('GitHub Username', usernameVal);
-addSummaryRow('Access Type', accessTypeVal);
-addSummaryRow('Approver', approverVal);
+        addSummaryRow('GitHub Username', usernameVal);
+        addSummaryRow('Access Type', accessTypeVal);
+        addSummaryRow('Approver', approverVal);
 
-if (accessType.value === 'team') {
-    addSummaryRow('Team Name', team.value.trim());
-} else {
-    addSummaryRow('Repository', repo.value.trim());
-    addSummaryRow('Permission Level', permissionVal);
-    addSummaryRow('Duration', `${durationVal} days`);
-}
+        if (accessType.value === 'team') {
+            addSummaryRow('Team Name', team.value.trim());
+        } else {
+            addSummaryRow('Repository', repo.value.trim());
+            addSummaryRow('Permission Level', permissionVal);
+            addSummaryRow('Duration', `${durationVal} days`);
+        }
 
-addSummaryRow('Justification', justificationVal);
+        addSummaryRow('Justification', justificationVal);
+
         document.getElementById('summarySection').style.display = 'block';
         document.getElementById('reviewBtn').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'block';
@@ -769,7 +779,7 @@ addSummaryRow('Justification', justificationVal);
             );
 
             if (response.ok) {
-                message.textContent = '✅ Request submitted successfully! You will be notified once approved.';
+                message.textContent = 'Request submitted successfully! You will be notified once approved.';
                 message.className = 'message success';
                 message.style.display = 'block';
                 form.reset();
