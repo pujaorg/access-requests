@@ -547,23 +547,13 @@
     // ============================================================
     // Validation
     // ============================================================
-    async function validateUsername(usernameValue) {
+    function validateUsername(usernameValue) {
         if (!usernameValue || usernameValue.trim().length === 0) {
-            usernameFeedback.textContent = 'Please enter your GitHub username.';
+            usernameFeedback.textContent = 'Please select your GitHub username.';
             usernameFeedback.className = 'feedback error';
             return false;
         }
 
-        if (allMembers.length === 0) {
-            await loadData();
-        }
-
-        const exists = allMembers.some(m => m.login.toLowerCase() === usernameValue.trim().toLowerCase());
-        if (!exists) {
-            usernameFeedback.textContent = 'User not found in your organization.';
-            usernameFeedback.className = 'feedback error';
-            return false;
-        }
         return true;
     }
 
@@ -595,46 +585,33 @@
             approverFeedback.className = 'feedback error';
             return false;
         }
-        const exists = APPROVERS.some(a => a.toLowerCase() === val.toLowerCase());
-        if (!exists) {
-            approverFeedback.textContent = 'Please select an approver from the list.';
-            approverFeedback.className = 'feedback error';
-            return false;
-        }
+
         return true;
     }
 
     function validateTeam() {
         if (accessType.value !== 'team') return true;
+
         const val = team.value.trim();
         if (!val) {
             teamFeedback.textContent = 'Please select a team.';
             teamFeedback.className = 'feedback error';
             return false;
         }
-        const exists = allTeams.some(t => t.name.toLowerCase() === val.toLowerCase());
-        if (!exists) {
-            teamFeedback.textContent = 'Team not found in your organization.';
-            teamFeedback.className = 'feedback error';
-            return false;
-        }
+
         return true;
     }
 
     function validateRepo() {
         if (accessType.value !== 'repo') return true;
+
         const val = repo.value.trim();
         if (!val) {
             repoFeedback.textContent = 'Please select a repository.';
             repoFeedback.className = 'feedback error';
             return false;
         }
-        const exists = allRepos.some(r => r.full_name.toLowerCase() === val.toLowerCase());
-        if (!exists) {
-            repoFeedback.textContent = 'Repository not found in your organization.';
-            repoFeedback.className = 'feedback error';
-            return false;
-        }
+
         return true;
     }
 
