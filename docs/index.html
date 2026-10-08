@@ -386,7 +386,8 @@
             const res = await fetch(`${url}?per_page=100&page=${page}`, {
                 headers: {
                     'Authorization': `token ${GITHUB_TOKEN}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2026-03-10'
                 }
             });
 
@@ -823,7 +824,8 @@
                     method: 'POST',
                     headers: {
                         'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json',
+                        'Accept': 'application/vnd.github+json',
+                        'X-GitHub-Api-Version': '2026-03-10',
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payload)
