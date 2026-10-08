@@ -444,6 +444,9 @@
     // Behavior (click to open, live search, loading state, clear
     // button, outside-click to close) is identical for every field.
     // ============================================================
+
+    const dropdowns = [];
+
     function setupDropdown({ inputId, clearId, dropdownId, searchId, resultsId, getItems, getLabel, emptyText, loadingText }) {
         const input = document.getElementById(inputId);
         const clearBtn = document.getElementById(clearId);
@@ -511,14 +514,19 @@
             dropdown.style.display = 'none';
         });
 
-        document.addEventListener('click', (e) => {
+        dropdowns.push({ input, dropdown });
+
+        return { input };
+    }
+
+    // One shared document-level click listener for all dropdowns.
+    document.addEventListener('click', (e) => {
+        dropdowns.forEach(({ input, dropdown }) => {
             if (!input.contains(e.target) && !dropdown.contains(e.target)) {
                 dropdown.style.display = 'none';
             }
         });
-
-        return { input };
-    }
+    });
 
     setupDropdown({
         inputId: 'username',
