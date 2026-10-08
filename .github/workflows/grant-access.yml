@@ -14,35 +14,6 @@ jobs:
     if: github.event.label.name == 'approved' || github.event.label.name == 'fixed'
     runs-on: ubuntu-latest
     steps:
-      - name: Check if actor is authorized
-        env:
-          ACTOR: ${{ github.actor }}
-        run: |
-          APPROVERS="pujadas02"
-          SUPPORT_USERS="pujapuja"
-          IFS=',' read -r -a approver_array <<< "$APPROVERS"
-          IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
-          AUTHORIZED=false
-          for approver in "${approver_array[@]}"; do
-            if [[ "$ACTOR" == "$approver" ]]; then
-              AUTHORIZED=true
-              break
-            fi
-          done
-          if [[ "$AUTHORIZED" == "false" ]]; then
-            for support_user in "${support_array[@]}"; do
-              if [[ "$ACTOR" == "$support_user" ]]; then
-                AUTHORIZED=true
-                break
-              fi
-            done
-          fi
-          if [[ "$AUTHORIZED" == "false" ]]; then
-            echo "Error: '$ACTOR' is not an authorized user!"
-            exit 1
-          fi
-          echo "'$ACTOR' is authorized."
-
       - name: Get issue details
         id: get_issue
         env:
@@ -99,20 +70,56 @@ jobs:
           }
           USERNAME=$(extract_value "GitHub Username" "$BODY")
           DURATION=$(extract_value "Duration" "$BODY")
-          echo "username=$USERNAME" >> $GITHUB_OUTPUT
-          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          APPROVER=$(extract_value "Approver" "$BODY")
+          echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
+          echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
+          echo "approver=$APPROVER" >> "$GITHUB_OUTPUT"
           if [[ "$LABELS" == *"team-based"* ]]; then
             TEAM=$(extract_value "GitHub Team Name" "$BODY")
-            echo "type=team" >> $GITHUB_OUTPUT
-            echo "target=$TEAM" >> $GITHUB_OUTPUT
+            echo "type=team" >> "$GITHUB_OUTPUT"
+            echo "target=$TEAM" >> "$GITHUB_OUTPUT"
           elif [[ "$LABELS" == *"repo-based"* ]]; then
             REPO=$(extract_value "Repository Name" "$BODY")
             [[ "$REPO" != */* ]] && REPO="${{ github.repository_owner }}/$REPO"
             PERMISSION=$(extract_value "Permission Level" "$BODY")
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
-            echo "type=repo" >> $GITHUB_OUTPUT
-            echo "target=$REPO" >> $GITHUB_OUTPUT
-            echo "permission=$PERMISSION_LOWER" >> $GITHUB_OUTPUT
+            echo "type=repo" >> "$GITHUB_OUTPUT"
+            echo "target=$REPO" >> "$GITHUB_OUTPUT"
+            echo "permission=$PERMISSION_LOWER" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if actor is authorized
+        env:
+          ACTOR: ${{ github.actor }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          APPROVER: ${{ steps.parse.outputs.approver }}
+          SUPPORT_USERS: "pujapuja"
+        run: |
+          if [[ "$EVENT_LABEL" == "approved" ]]; then
+            if [[ -z "$APPROVER" ]]; then
+              echo "Error: No approver is specified in the issue."
+              exit 1
+            fi
+            if [[ "$ACTOR" != "$APPROVER" ]]; then
+              echo "Error: '$ACTOR' is not the approver specified in the issue."
+              exit 1
+            fi
+            echo "'$ACTOR' matches the approver specified in the issue."
+          elif [[ "$EVENT_LABEL" == "fixed" ]]; then
+            AUTHORIZED=false
+            IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
+            for support_user in "${support_array[@]}"; do
+              support_user=$(echo "$support_user" | xargs)
+              if [[ "$ACTOR" == "$support_user" ]]; then
+                AUTHORIZED=true
+                break
+              fi
+            done
+            if [[ "$AUTHORIZED" == "false" ]]; then
+              echo "Error: '$ACTOR' is not an authorized support user."
+              exit 1
+            fi
+            echo "'$ACTOR' is an authorized support user."
           fi
 
       - name: Calculate expiration
@@ -123,7 +130,7 @@ jobs:
             DURATION=1
           fi
           EXPIRATION=$(date -u -d "+$DURATION days" +"%Y-%m-%dT%H:%M:%SZ")
-          echo "expiration=$EXPIRATION" >> $GITHUB_OUTPUT
+          echo "expiration=$EXPIRATION" >> "$GITHUB_OUTPUT"
           echo "Expiration: $EXPIRATION"
 
       - name: Grant team access
@@ -223,26 +230,8 @@ jobs:
             exit 1
           fi
 
-      - name: Add access-failed label
-        if: always() && steps.grant_team.outputs.success != 'true' && steps.grant_repo.outputs.success != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
-            -d '{"labels":["access-failed"]}')
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "access-failed label added successfully."
-          else
-            echo "::error::Failed to add access-failed label. HTTP code: $RESPONSE"
-          fi
-
       - name: Comment on issue
-        if: always() && (steps.grant_team.outputs.success == 'true' || steps.grant_repo.outputs.success == 'true')
+        if: success() && (steps.grant_team.outputs.success == 'true' || steps.grant_repo.outputs.success == 'true')
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           USERNAME: ${{ steps.parse.outputs.username }}
@@ -264,7 +253,7 @@ jobs:
             -d "{\"body\": \"$COMMENT\"}"
 
       - name: Close issue (only for team-based)
-        if: always() && steps.grant_team.outputs.success == 'true'
+        if: success() && steps.grant_team.outputs.success == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -276,13 +265,24 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
             -d "{\"state\": \"closed\"}"
 
-      - name: Comment on issue (failure)
-        if: always() && steps.grant_team.outputs.success != 'true' && steps.grant_repo.outputs.success != 'true'
+      - name: Handle workflow failure
+        if: always() && job.status == 'failure'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           SUPPORT_USERS: "pujapuja"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
+            -d '{"labels":["access-failed"]}')
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "access-failed label added successfully."
+          else
+            echo "::error::Failed to add access-failed label. HTTP code: $RESPONSE"
+          fi
           MENTIONS=""
           IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
           for support_user in "${support_array[@]}"; do
