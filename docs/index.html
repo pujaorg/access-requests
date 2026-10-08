@@ -190,7 +190,6 @@
             color: #d73a49;
             background: #f0f0f0;
         }
-
         #summarySection {
             display: none;
             height: auto;
@@ -206,7 +205,6 @@
     <div class="container">
         <h1>GitHub Access Request</h1>
         <p class="subtitle">Request access to a GitHub team or repository</p>
-
         <form id="accessForm">
             <!-- Access Type -->
             <div id="formSection">
@@ -217,7 +215,6 @@
                         <option value="repo">Repo Access (Temporary / Exception)</option>
                     </select>
                 </div>
-
                 <!-- Username -->
                 <div class="form-group">
                     <label for="username">GitHub Username <span class="required">*</span></label>
@@ -231,7 +228,6 @@
                     </div>
                     <div id="usernameFeedback" class="feedback"></div>
                 </div>
-
                 <!-- Team Fields (default visible) -->
                 <div id="teamFields">
                     <div class="form-group">
@@ -247,7 +243,6 @@
                         <div id="teamFeedback" class="feedback"></div>
                     </div>
                 </div>
-
                 <!-- Repo Fields (hidden by default) -->
                 <div id="repoFields" class="hidden">
                     <div class="form-group">
@@ -262,7 +257,6 @@
                         </div>
                         <div id="repoFeedback" class="feedback"></div>
                     </div>
-
                     <div class="form-group">
                         <label for="permission">Permission Level <span class="required">*</span></label>
                         <select id="permission">
@@ -273,14 +267,12 @@
                             <option value="admin">Admin</option>
                         </select>
                     </div>
-
                     <div class="form-group">
                         <label for="duration">Duration (days) <span class="required">*</span></label>
                         <input type="number" id="duration" min="1" max="30" value="1"/>
                         <div id="durationFeedback" class="feedback"></div>
                     </div>
                 </div>
-
                 <!-- Approver -->
                 <div class="form-group">
                     <label for="approver">Approver <span class="required">*</span></label>
@@ -294,7 +286,6 @@
                     </div>
                     <div id="approverFeedback" class="feedback"></div>
                 </div>
-
                 <!-- Justification -->
                 <div class="form-group">
                     <label for="justification">Justification <span class="required">*</span></label>
@@ -303,28 +294,20 @@
                     <div class="char-count"><span id="charCount">0</span> / 500 characters</div>
                 </div>
             </div>
-
             <hr class="divider" />
-
             <button type="button" class="btn" id="reviewBtn" style="background: #0969da;">Review Request</button>
-
             <div id="summarySection">
                 <h3 style="margin-bottom: 8px;">Review Your Request</h3>
                 <div id="summaryContent"></div>
             </div>
-
             <button type="submit" class="btn" id="submitBtn" style="display: none;">Confirm Submit</button>
             <button type="button" class="btn" id="backBtn" style="display: none; background: #6c757d; margin-top: 10px;">← Go Back and Edit</button>
-
         </form>
-
         <div id="message" class="message"></div>
     </div>
 
     <script>
-    // ============================================================
     // DOM refs
-    // ============================================================
     const form = document.getElementById('accessForm');
     const accessType = document.getElementById('accessType');
     const username = document.getElementById('username');
@@ -345,45 +328,28 @@
     const message = document.getElementById('message');
     const teamFields = document.getElementById('teamFields');
     const repoFields = document.getElementById('repoFields');
-
-    // ============================================================
-    // GitHub Configuration
-    // ============================================================
     const GITHUB_ORG = 'pujaorg';
     const GITHUB_REPO = 'access-requests';
     const GITHUB_TOKEN = localStorage.getItem('github_token') || 'your-token';
-
-    // Approvers list — EDIT THIS ARRAY to add/remove/rename approvers.
     const APPROVERS = ['pujadas02', 'beep024', 'approver3'];
 
-    // ============================================================
-    // Toggle fields based on access type
-    // ============================================================
     accessType.addEventListener('change', () => {
         const isTeam = accessType.value === 'team';
         teamFields.classList.toggle('hidden', !isTeam);
         repoFields.classList.toggle('hidden', isTeam);
-
         [teamFeedback, repoFeedback, durationFeedback, usernameFeedback, approverFeedback, justificationFeedback]
             .forEach(el => el.textContent = '');
-
         message.style.display = 'none';
         message.textContent = '';
     });
-
-    // ============================================================
-    // Data loading (teams, members, repos) — 3 paginated API calls
-    // ============================================================
     let allTeams = [];
     let allMembers = [];
     let allRepos = [];
     let isLoading = true;
-
     async function fetchAllPages(url) {
         let results = [];
         let page = 1;
         let hasMore = true;
-
         while (hasMore) {
             const res = await fetch(`${url}?per_page=100&page=${page}`, {
                 headers: {
@@ -392,13 +358,10 @@
                     'X-GitHub-Api-Version': '2026-03-10'
                 }
             });
-
             if (!res.ok) {
                 throw new Error(`GitHub API request failed: ${res.status} ${res.statusText}`);
             }
-
             const data = await res.json();
-
             if (!data.length) {
                 hasMore = false;
             } else {
@@ -406,33 +369,26 @@
                 page++;
             }
         }
-
         return results;
     }
-
     async function loadData() {
         isLoading = true;
-
         try {
             console.log('Fetching teams, members, and repos...');
-
             const [teams, members, repos] = await Promise.all([
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/teams`),
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/members`),
                 fetchAllPages(`https://api.github.com/orgs/${GITHUB_ORG}/repos`)
             ]);
-
             allTeams = teams;
             allMembers = members;
             allRepos = repos;
-
             console.log('Teams loaded:', allTeams.length);
             console.log('Members loaded:', allMembers.length);
             console.log('Repos loaded:', allRepos.length);
 
         } catch (error) {
             console.error('Error loading data:', error);
-
             if (allTeams.length || allMembers.length || allRepos.length) {
                 console.log('Using data already loaded during this session.');
             } else {
@@ -441,23 +397,15 @@
                 message.style.display = 'block';
             }
         }
-
         isLoading = false;
     }
-
-    // ============================================================
-    // Generic searchable dropdown
-    // ============================================================
-
     const dropdowns = [];
-
     function setupDropdown({ inputId, clearId, dropdownId, searchId, resultsId, getItems, getLabel, emptyText, loadingText }) {
         const input = document.getElementById(inputId);
         const clearBtn = document.getElementById(clearId);
         const dropdown = document.getElementById(dropdownId);
         const search = document.getElementById(searchId);
         const results = document.getElementById(resultsId);
-
         function renderMessage(text) {
             results.innerHTML = '';
             const item = document.createElement('div');
@@ -467,7 +415,6 @@
             item.style.cursor = 'default';
             results.appendChild(item);
         }
-
         function filter(query) {
             results.innerHTML = '';
             const matches = getItems(query);
@@ -476,7 +423,6 @@
                 renderMessage(emptyText);
                 return;
             }
-
             matches.forEach(entry => {
                 const label = getLabel(entry);
                 const item = document.createElement('div');
@@ -490,40 +436,30 @@
                 results.appendChild(item);
             });
         }
-
         input.addEventListener('click', () => {
             dropdown.style.display = 'block';
             search.value = '';
             search.focus();
-
             if (isLoading && loadingText) {
                 renderMessage(loadingText);
                 return;
             }
-
             filter('');
         });
-
         search.addEventListener('input', function () {
             filter(this.value.trim().toLowerCase());
         });
-
         input.addEventListener('change', function () {
             clearBtn.style.display = this.value ? 'inline' : 'none';
         });
-
         clearBtn.addEventListener('click', () => {
             input.value = '';
             clearBtn.style.display = 'none';
             dropdown.style.display = 'none';
         });
-
         dropdowns.push({ input, dropdown });
-
         return { input };
     }
-
-    // One shared document-level click listener for all dropdowns.
     document.addEventListener('click', (e) => {
         dropdowns.forEach(({ input, dropdown }) => {
             if (!input.contains(e.target) && !dropdown.contains(e.target)) {
@@ -531,7 +467,6 @@
             }
         });
     });
-
     setupDropdown({
         inputId: 'username',
         clearId: 'usernameClear',
@@ -543,7 +478,6 @@
         emptyText: 'No matching users found',
         loadingText: 'Loading users...'
     });
-
     setupDropdown({
         inputId: 'team',
         clearId: 'teamClear',
@@ -555,7 +489,6 @@
         emptyText: 'No matching teams found',
         loadingText: 'Loading teams...'
     });
-
     setupDropdown({
         inputId: 'repo',
         clearId: 'repoClear',
@@ -567,7 +500,6 @@
         emptyText: 'No matching repositories found',
         loadingText: 'Loading repositories...'
     });
-
     setupDropdown({
         inputId: 'approver',
         clearId: 'approverClear',
@@ -579,154 +511,112 @@
         emptyText: 'No matching approvers found',
         loadingText: 'Loading approvers...'
     });
-
-    // ============================================================
-    // Justification character counter
-    // ============================================================
     justification.addEventListener('input', () => {
         charCount.textContent = justification.value.length;
     });
-
-    // ============================================================
-    // Validation
-    // ============================================================
     function validateUsername(usernameValue) {
         const val = usernameValue.trim();
-
         if (!val) {
             usernameFeedback.textContent = 'Please select your GitHub username.';
             usernameFeedback.className = 'feedback error';
             return false;
         }
-
         const exists = allMembers.some(member => member.login === val);
-
         if (!exists) {
             usernameFeedback.textContent = 'Please select a valid GitHub username.';
             usernameFeedback.className = 'feedback error';
             return false;
         }
-
         return true;
     }
-
     function validateJustification() {
         const text = justification.value.trim();
         const len = text.length;
-
         if (len === 0) {
             justificationFeedback.textContent = 'Please provide a justification.';
             justificationFeedback.className = 'feedback error';
             return false;
         }
-
         if (len < 10) {
             justificationFeedback.textContent = 'Minimum 10 characters.';
             justificationFeedback.className = 'feedback error';
             return false;
         }
-
         if (len > 500) {
             justificationFeedback.textContent = 'Maximum 500 characters.';
             justificationFeedback.className = 'feedback error';
             return false;
         }
-
         return true;
     }
-
     function validateApprover() {
         const val = approver.value.trim();
-
         if (!val) {
             approverFeedback.textContent = 'Please select an approver.';
             approverFeedback.className = 'feedback error';
             return false;
         }
-
         const exists = APPROVERS.includes(val);
-
         if (!exists) {
             approverFeedback.textContent = 'Please select a valid approver.';
             approverFeedback.className = 'feedback error';
             return false;
         }
-
         return true;
     }
-
     function validateTeam() {
         if (accessType.value !== 'team') return true;
-
         const val = team.value.trim();
-
         if (!val) {
             teamFeedback.textContent = 'Please select a team.';
             teamFeedback.className = 'feedback error';
             return false;
         }
-
         const exists = allTeams.some(t => t.name === val);
-
         if (!exists) {
             teamFeedback.textContent = 'Please select a valid team.';
             teamFeedback.className = 'feedback error';
             return false;
         }
-
         return true;
     }
-
     function validateRepo() {
         if (accessType.value !== 'repo') return true;
-
         const val = repo.value.trim();
-
         if (!val) {
             repoFeedback.textContent = 'Please select a repository.';
             repoFeedback.className = 'feedback error';
             return false;
         }
-
         const exists = allRepos.some(r => r.full_name === val);
-
         if (!exists) {
             repoFeedback.textContent = 'Please select a valid repository.';
             repoFeedback.className = 'feedback error';
             return false;
         }
-
         return true;
     }
-
     function validateDuration() {
         if (accessType.value !== 'repo') return true;
-
         const val = Number(duration.value);
-
         if (!Number.isInteger(val) || val < 1 || val > 30) {
             durationFeedback.textContent = 'Duration must be between 1 and 30 days.';
             durationFeedback.className = 'feedback error';
             return false;
         }
-
         durationFeedback.textContent = '';
         durationFeedback.className = 'feedback';
-
         return true;
     }
-
     function validateAllFields() {
         [usernameFeedback, teamFeedback, repoFeedback, approverFeedback, justificationFeedback, durationFeedback]
             .forEach(el => el.textContent = '');
-
         const isUsernameValid = validateUsername(username.value);
         const isTeamValid = validateTeam();
         const isRepoValid = validateRepo();
         const isApproverValid = validateApprover();
         const isJustificationValid = validateJustification();
         const isDurationValid = validateDuration();
-
         return isUsernameValid &&
             isTeamValid &&
             isRepoValid &&
@@ -735,19 +625,14 @@
             isDurationValid;
     }
 
-    // ============================================================
-    // Build issue body
-    // ============================================================
     function buildIssueBody() {
         const isTeam = accessType.value === 'team';
         const usernameVal = username.value.trim();
         const justificationVal = justification.value.trim();
         const durationVal = duration.value || 'N/A';
-
         let body = `### GitHub Username\n${usernameVal}\n\n`;
         body += `### Access Type\n${isTeam ? 'Team-based' : 'Repo-based'}\n\n`;
         body += `### Approver\n${approver.value.trim()}\n\n`;
-
         if (isTeam) {
             body += `### GitHub Team Name\n${team.value.trim()}\n\n`;
         } else {
@@ -755,20 +640,12 @@
             body += `### Permission Level\n${permission.value}\n\n`;
             body += `### Duration\n${durationVal} days\n\n`;
         }
-
         body += `### Justification\n${justificationVal}`;
-
         return body;
     }
-
-    // ============================================================
-    // Review / Back handlers
-    // ============================================================
     document.getElementById('reviewBtn').addEventListener('click', function() {
         if (!validateAllFields()) return;
-
         document.getElementById('formSection').style.display = 'none';
-
         const usernameVal = username.value.trim();
         const accessTypeVal = accessType.value === 'team'
             ? 'Team Access (Permanent)'
@@ -777,26 +654,19 @@
         const durationVal = duration.value || 'N/A';
         const justificationVal = justification.value.trim();
         const approverVal = approver.value.trim();
-
         const summaryContent = document.getElementById('summaryContent');
         summaryContent.innerHTML = '';
-
         function addSummaryRow(label, value) {
             const p = document.createElement('p');
-
             const strong = document.createElement('strong');
             strong.textContent = `${label}: `;
-
             p.appendChild(strong);
             p.appendChild(document.createTextNode(value));
-
             summaryContent.appendChild(p);
         }
-
         addSummaryRow('GitHub Username', usernameVal);
         addSummaryRow('Access Type', accessTypeVal);
         addSummaryRow('Approver', approverVal);
-
         if (accessType.value === 'team') {
             addSummaryRow('Team Name', team.value.trim());
         } else {
@@ -804,15 +674,12 @@
             addSummaryRow('Permission Level', permissionVal);
             addSummaryRow('Duration', `${durationVal} days`);
         }
-
         addSummaryRow('Justification', justificationVal);
-
         document.getElementById('summarySection').style.display = 'block';
         document.getElementById('reviewBtn').style.display = 'none';
         document.getElementById('submitBtn').style.display = 'block';
         document.getElementById('backBtn').style.display = 'block';
     });
-
     document.getElementById('backBtn').addEventListener('click', function() {
         document.getElementById('formSection').style.display = 'block';
         document.getElementById('summarySection').style.display = 'none';
@@ -820,39 +687,28 @@
         document.getElementById('submitBtn').style.display = 'none';
         document.getElementById('backBtn').style.display = 'none';
     });
-
-    // ============================================================
-    // Submit handler
-    // ============================================================
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
-
         message.style.display = 'none';
         message.className = 'message';
-
         if (!validateAllFields()) {
-            message.textContent = '❌ Please fix the errors above.';
+            message.textContent = 'Please fix the errors above.';
             message.className = 'message error';
             message.style.display = 'block';
             return;
         }
-
         const issueBody = buildIssueBody();
         const isTeam = accessType.value === 'team';
-
         const title = isTeam
             ? `[Team Request]: ${username.value.trim()} → ${team.value.trim()}`
             : `[Repo Request]: ${username.value.trim()} → ${repo.value.trim()}`;
-
         const payload = {
             title: title,
             body: issueBody,
             labels: ['access-request', isTeam ? 'team-based' : 'repo-based']
         };
-
         submitBtn.disabled = true;
         submitBtn.textContent = 'Submitting...';
-
         try {
             const response = await fetch(
                 `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues`,
@@ -867,42 +723,30 @@
                     body: JSON.stringify(payload)
                 }
             );
-
             if (response.ok) {
                 message.textContent = 'Request submitted successfully! You will be notified once approved.';
                 message.className = 'message success';
                 message.style.display = 'block';
-
                 form.reset();
                 charCount.textContent = '0';
                 accessType.dispatchEvent(new Event('change'));
-
                 submitBtn.textContent = 'Submitted';
             } else {
                 const error = await response.json();
-
-                message.textContent = `❌ Failed to submit: ${error.message || 'Unknown error'}`;
+                message.textContent = `Failed to submit: ${error.message || 'Unknown error'}`;
                 message.className = 'message error';
                 message.style.display = 'block';
-
-                // Re-enable submit button so the user can retry.
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Confirm Submit';
             }
         } catch (err) {
-            message.textContent = `❌ Error: ${err.message}`;
+            message.textContent = `Error: ${err.message}`;
             message.className = 'message error';
             message.style.display = 'block';
-
-            // Re-enable submit button so the user can retry.
             submitBtn.disabled = false;
             submitBtn.textContent = 'Confirm Submit';
         }
     });
-
-    // ============================================================
-    // Initial state
-    // ============================================================
     accessType.dispatchEvent(new Event('change'));
     loadData();
     </script>
