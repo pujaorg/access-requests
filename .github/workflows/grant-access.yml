@@ -9,6 +9,10 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: grant-access-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   grant:
     if: github.event.label.name == 'approved' || github.event.label.name == 'fixed'
@@ -23,7 +27,8 @@ jobs:
           set -e
           RESPONSE=$(curl -s -o issue.json -w "%{http_code}" \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER")
           if [ "$RESPONSE" -ne 200 ]; then
             echo "::error::Failed to get issue details. HTTP code: $RESPONSE"
@@ -74,11 +79,11 @@ jobs:
           echo "username=$USERNAME" >> "$GITHUB_OUTPUT"
           echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
           echo "approver=$APPROVER" >> "$GITHUB_OUTPUT"
-          if [[ "$LABELS" == *"team-based"* ]]; then
+          if printf '%s\n' "$LABELS" | grep -Fxq "team-based"; then
             TEAM=$(extract_value "GitHub Team Name" "$BODY")
             echo "type=team" >> "$GITHUB_OUTPUT"
             echo "target=$TEAM" >> "$GITHUB_OUTPUT"
-          elif [[ "$LABELS" == *"repo-based"* ]]; then
+          elif printf '%s\n' "$LABELS" | grep -Fxq "repo-based"; then
             REPO=$(extract_value "Repository Name" "$BODY")
             [[ "$REPO" != */* ]] && REPO="${{ github.repository_owner }}/$REPO"
             PERMISSION=$(extract_value "Permission Level" "$BODY")
@@ -112,7 +117,8 @@ jobs:
               RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
                 -X DELETE \
                 -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
                 "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/approved")
               if [ "$RESPONSE" -eq 200 ]; then
                 echo "Unauthorized 'approved' label removed."
@@ -177,7 +183,8 @@ jobs:
             echo "Searching teams page $PAGE..."
             RESPONSE=$(curl -s \
               -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
               "https://api.github.com/orgs/$ORG/teams?per_page=100&page=$PAGE")
             MATCH=$(echo "$RESPONSE" | jq -r --arg TEAM "$TEAM" '
               .[] |
@@ -199,7 +206,8 @@ jobs:
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/orgs/$ORG/teams/$TEAM_SLUG/memberships/$USERNAME")
           if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
             echo "success=true" >> "$GITHUB_OUTPUT"
@@ -223,7 +231,8 @@ jobs:
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/$REPO/collaborators/$USERNAME" \
             -d "{\"permission\": \"$PERMISSION\"}")
           if [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
@@ -245,7 +254,8 @@ jobs:
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
             -d '{"labels":["access-granted"]}')
           if [ "$RESPONSE" -eq 200 ]; then
@@ -266,7 +276,8 @@ jobs:
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
             -d "{\"labels\": [\"expires-$EXPIRATION\"]}")
           if [ "$RESPONSE" -eq 200 ]; then
@@ -294,11 +305,20 @@ jobs:
           else
             COMMENT="**Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:** Access has been granted."
           fi
-          curl -X POST \
+          COMMENT_JSON=$(jq -n --arg body "$COMMENT" '{body: $body}')
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-            -d "{\"body\": \"$COMMENT\"}"
+            -d "$COMMENT_JSON")
+          if [ "$RESPONSE" -eq 201 ]; then
+            echo "Issue comment added successfully."
+          else
+            echo "::error::Failed to add issue comment. HTTP code: $RESPONSE"
+            exit 1
+          fi
 
       - name: Close issue (only for team-based)
         if: success() && steps.grant_team.outputs.success == 'true'
@@ -307,11 +327,19 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           echo "Closing issue #$ISSUE_NUMBER (team-based request)"
-          curl -X PATCH \
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PATCH \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER" \
-            -d "{\"state\": \"closed\"}"
+            -d '{"state":"closed"}')
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "Issue closed successfully."
+          else
+            echo "::error::Failed to close issue. HTTP code: $RESPONSE"
+            exit 1
+          fi
 
       - name: Handle workflow failure
         if: failure()
@@ -323,7 +351,8 @@ jobs:
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
             -d '{"labels":["access-failed"]}')
           if [ "$RESPONSE" -eq 200 ]; then
@@ -340,8 +369,16 @@ jobs:
             fi
           done
           COMMENT="**Access could not be granted.**\n\n$MENTIONS\n\nPlease check the workflow and investigate the issue. Once the issue is resolved, add the \`fixed\` label to retry the request."
-          curl -X POST \
+          COMMENT_JSON=$(jq -n --arg body "$COMMENT" '{body: $body}')
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2026-03-10" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-            -d "{\"body\": \"$COMMENT\"}"
+            -d "$COMMENT_JSON")
+          if [ "$RESPONSE" -eq 201 ]; then
+            echo "Failure comment added successfully."
+          else
+            echo "::error::Failed to add failure comment. HTTP code: $RESPONSE"
+          fi
