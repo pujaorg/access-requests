@@ -93,6 +93,7 @@ jobs:
           ACTOR: ${{ github.actor }}
           EVENT_LABEL: ${{ github.event.label.name }}
           APPROVER: ${{ steps.parse.outputs.approver }}
+          LABELS: ${{ steps.get_issue.outputs.labels }}
           SUPPORT_USERS: "pujapuja"
         run: |
           if [[ "$EVENT_LABEL" == "approved" ]]; then
@@ -106,6 +107,10 @@ jobs:
             fi
             echo "'$ACTOR' matches the approver specified in the issue."
           elif [[ "$EVENT_LABEL" == "fixed" ]]; then
+            if ! printf '%s\n' "$LABELS" | grep -Fxq "approved"; then
+              echo "Error: The issue must have the 'approved' label before 'fixed' can trigger a retry."
+              exit 1
+            fi
             AUTHORIZED=false
             IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
             for support_user in "${support_array[@]}"; do
@@ -119,7 +124,7 @@ jobs:
               echo "Error: '$ACTOR' is not an authorized support user."
               exit 1
             fi
-            echo "'$ACTOR' is an authorized support user."
+            echo "'$ACTOR' is an authorized support user and the issue is approved."
           else
             echo "Error: Unsupported label trigger '$EVENT_LABEL'."
             exit 1
