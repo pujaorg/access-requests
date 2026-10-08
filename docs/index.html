@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -169,6 +170,8 @@
         .dropdown-search:focus {
             border-bottom-color: #0969da;
         }
+
+        /* Clear buttons */
         .clear-btn {
             position: absolute;
             right: 12px;
@@ -178,6 +181,8 @@
             font-size: 16px;
             color: #888;
             padding: 4px;
+            border: none;
+            background: transparent;
             border-radius: 50%;
             line-height: 1;
             user-select: none;
@@ -186,6 +191,7 @@
             color: #d73a49;
             background: #f0f0f0;
         }
+
         #summarySection {
             display: none;
             height: auto;
@@ -218,7 +224,7 @@
                     <label for="username">GitHub Username <span class="required">*</span></label>
                     <div style="position: relative;">
                         <input type="text" id="username" placeholder="Select a user..." readonly autocomplete="off" />
-                        <span id="usernameClear" class="clear-btn" style="display: none;">✕</span>
+                        <button type="button" id="usernameClear" class="clear-btn" style="display: none;">✕</button>
                         <div id="usernameDropdown" class="dropdown-list">
                             <input type="text" id="usernameSearch" placeholder="Search users..." class="dropdown-search" />
                             <div id="usernameResults"></div>
@@ -233,7 +239,7 @@
                         <label for="team">GitHub Team Name <span class="required">*</span></label>
                         <div style="position: relative;">
                             <input type="text" id="team" placeholder="Select a team..." readonly autocomplete="off" />
-                            <span id="teamClear" class="clear-btn" style="display: none;">✕</span>
+                            <button type="button" id="teamClear" class="clear-btn" style="display: none;">✕</button>
                             <div id="teamDropdown" class="dropdown-list">
                                 <input type="text" id="teamSearch" placeholder="Search teams..." class="dropdown-search" />
                                 <div id="teamResults"></div>
@@ -249,7 +255,7 @@
                         <label for="repo">Repository Name <span class="required">*</span></label>
                         <div style="position: relative;">
                             <input type="text" id="repo" placeholder="Select a repository..." readonly autocomplete="off" />
-                            <span id="repoClear" class="clear-btn" style="display: none;">✕</span>
+                            <button type="button" id="repoClear" class="clear-btn" style="display: none;">✕</button>
                             <div id="repoDropdown" class="dropdown-list">
                                 <input type="text" id="repoSearch" placeholder="Search repositories..." class="dropdown-search" />
                                 <div id="repoResults"></div>
@@ -279,7 +285,7 @@
                     <label for="approver">Approver <span class="required">*</span></label>
                     <div style="position: relative;">
                         <input type="text" id="approver" placeholder="Select an approver..." readonly autocomplete="off" />
-                        <span id="approverClear" class="clear-btn" style="display: none;">✕</span>
+                        <button type="button" id="approverClear" class="clear-btn" style="display: none;">✕</button>
                         <div id="approverDropdown" class="dropdown-list">
                             <input type="text" id="approverSearch" placeholder="Search approvers..." class="dropdown-search" />
                             <div id="approverResults"></div>
