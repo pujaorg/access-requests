@@ -21,19 +21,16 @@ jobs:
           APPROVERS="pujadas02"
           IFS=',' read -r -a approver_array <<< "$APPROVERS"
           AUTHORIZED=false
-
           for approver in "${approver_array[@]}"; do
             if [[ "$ACTOR" == "$approver" ]]; then
               AUTHORIZED=true
               break
             fi
           done
-
           if [[ "$AUTHORIZED" == "false" ]]; then
             echo "Error: '$ACTOR' is not an authorized approver!"
             exit 1
           fi
-
           echo "'$ACTOR' is authorized."
 
       - name: Get issue details
@@ -43,17 +40,14 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -e
-
           RESPONSE=$(curl -s -o issue.json -w "%{http_code}" \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER")
-
           if [ "$RESPONSE" -ne 200 ]; then
             echo "::error::Failed to get issue details. HTTP code: $RESPONSE"
             exit 1
           fi
-
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.body' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -86,33 +80,24 @@ jobs:
                   exit
                 }
               ')
-
             if [[ "$value" == "---"* || "$value" == "###"* ]]; then
               value=""
             fi
-
             echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
           }
-
           USERNAME=$(extract_value "GitHub Username" "$BODY")
           DURATION=$(extract_value "Duration" "$BODY")
-
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
-
           if [[ "$LABELS" == *"team-based"* ]]; then
             TEAM=$(extract_value "GitHub Team Name" "$BODY")
-
             echo "type=team" >> $GITHUB_OUTPUT
             echo "target=$TEAM" >> $GITHUB_OUTPUT
-
           elif [[ "$LABELS" == *"repo-based"* ]]; then
             REPO=$(extract_value "Repository Name" "$BODY")
             [[ "$REPO" != */* ]] && REPO="${{ github.repository_owner }}/$REPO"
-
             PERMISSION=$(extract_value "Permission Level" "$BODY")
             PERMISSION_LOWER=$(echo "$PERMISSION" | tr '[:upper:]' '[:lower:]')
-
             echo "type=repo" >> $GITHUB_OUTPUT
             echo "target=$REPO" >> $GITHUB_OUTPUT
             echo "permission=$PERMISSION_LOWER" >> $GITHUB_OUTPUT
@@ -122,13 +107,10 @@ jobs:
         id: expiration
         run: |
           DURATION="${{ steps.parse.outputs.duration }}"
-
           if [ -z "$DURATION" ]; then
             DURATION=1
           fi
-
           EXPIRATION=$(date -u -d "+$DURATION days" +"%Y-%m-%dT%H:%M:%SZ")
-
           echo "expiration=$EXPIRATION" >> $GITHUB_OUTPUT
           echo "Expiration: $EXPIRATION"
 
@@ -141,9 +123,7 @@ jobs:
           TEAM: ${{ steps.parse.outputs.target }}
         run: |
           echo "Adding $USERNAME to team $TEAM..."
-
           ORG="${{ github.repository_owner }}"
-
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
@@ -169,14 +149,12 @@ jobs:
           PERMISSION: ${{ steps.parse.outputs.permission }}
         run: |
           echo "Adding $USERNAME to $REPO with $PERMISSION access..."
-
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/$REPO/collaborators/$USERNAME" \
             -d "{\"permission\": \"$PERMISSION\"}")
-
           if [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
             echo "success=true" >> $GITHUB_OUTPUT
             echo "granted_type=repo" >> $GITHUB_OUTPUT
@@ -209,188 +187,14 @@ jobs:
             echo "::error::Failed to add expiration label. HTTP code: $RESPONSE"
             exit 1
           fi
-
-      - name: Check if access was granted
-        id: check_grant
-        if: always()
-        run: |
-          GRANTED=false
-          GRANTED_TYPE=""
-          TARGET=""
-          PERMISSION=""
-
-          if [ "${{ steps.grant_team.outputs.success }}" == "true" ]; then
-            GRANTED=true
-            GRANTED_TYPE="team"
-            TARGET="${{ steps.parse.outputs.target }}"
-          fi
-
-          if [ "${{ steps.grant_repo.outputs.success }}" == "true" ] && \
-             [ "${{ steps.add_expiration.outputs.success }}" == "true" ]; then
-            GRANTED=true
-            GRANTED_TYPE="repo"
-            TARGET="${{ steps.parse.outputs.target }}"
-            PERMISSION="${{ steps.parse.outputs.permission }}"
-          fi
-
-          echo "granted=$GRANTED" >> $GITHUB_OUTPUT
-          echo "granted_type=$GRANTED_TYPE" >> $GITHUB_OUTPUT
-          echo "target=$TARGET" >> $GITHUB_OUTPUT
-          echo "permission=$PERMISSION" >> $GITHUB_OUTPUT
-
-      # ============================================================
-      # PROJECT BOARD AUTOMATION STEPS
-      # ============================================================
-
-      - name: Move to Approved column
-        if: steps.check_grant.outputs.granted == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
-          PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
-          FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
-          ORG_NAME: "pujaorg"
-          PROJECT_NUMBER: "1"
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!){
-              organization(login:$org){
-                projectV2(number:$projectNumber){
-                  items(first:100){
-                    nodes{
-                      id
-                      content{
-                        ... on Issue{
-                          number
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-
-          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
-            echo "::error::Issue not in project"
-            exit 1
-          fi
-
-          echo "Found ITEM_ID: $ITEM_ID"
-
-          gh api graphql -f query='
-            mutation($project:ID!,$item:ID!,$field:ID!){
-              updateProjectV2ItemFieldValue(input:{
-                projectId:$project
-                itemId:$item
-                fieldId:$field
-                value:{ singleSelectOptionId: "98236657" }
-              }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID"
-
-      - name: Move to Pending Revocation (repo-based)
-        if: steps.check_grant.outputs.granted_type == 'repo' && steps.check_grant.outputs.granted == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
-          PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
-          FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
-          ORG_NAME: "pujaorg"
-          PROJECT_NUMBER: "1"
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!){
-              organization(login:$org){
-                projectV2(number:$projectNumber){
-                  items(first:100){
-                    nodes{
-                      id
-                      content{
-                        ... on Issue{
-                          number
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-
-          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
-            echo "::error::Issue not in project"
-            exit 1
-          fi
-
-          EXPIRES_LABEL=$(gh issue view "$ISSUE_NUMBER" --repo "${{ github.repository }}" --json labels -q '.labels[].name' | grep -oP 'expires-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' | head -1)
-
-          if [ -n "$EXPIRES_LABEL" ]; then
-            echo "Moving to Pending Revocation"
-
-            gh api graphql -f query='
-              mutation($project:ID!,$item:ID!,$field:ID!){
-                updateProjectV2ItemFieldValue(input:{
-                  projectId:$project
-                  itemId:$item
-                  fieldId:$field
-                  value:{ singleSelectOptionId: "0a2b6e2b" }
-                }){ projectV2Item { id } }
-              }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID"
-          fi
-
-      - name: Move to Workflow Failure column
-        if: steps.check_grant.outputs.granted == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.PROJECT_AUTOMATION }}
-          PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
-          FIELD_ID: "PVTSSF_lADOEi48RM4BeAPnzhYdoh0"
-          ORG_NAME: "pujaorg"
-          PROJECT_NUMBER: "1"
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          ITEM_ID=$(gh api graphql -f query='
-            query($org:String!,$projectNumber:Int!){
-              organization(login:$org){
-                projectV2(number:$projectNumber){
-                  items(first:100){
-                    nodes{
-                      id
-                      content{
-                        ... on Issue{
-                          number
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }' -F org="$ORG_NAME" -F projectNumber="$PROJECT_NUMBER" | jq -r ".data.organization.projectV2.items.nodes[] | select(.content.number == $ISSUE_NUMBER) | .id")
-
-          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
-            echo "::error::Issue not in project"
-            exit 1
-          fi
-
-          gh api graphql -f query='
-            mutation($project:ID!,$item:ID!,$field:ID!){
-              updateProjectV2ItemFieldValue(input:{
-                projectId:$project
-                itemId:$item
-                fieldId:$field
-                value:{ singleSelectOptionId: "8acc5108" }
-              }){ projectV2Item { id } }
-            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$FIELD_ID
-
-      # ============================================================
-      # END PROJECT BOARD AUTOMATION
-      # ============================================================
-
       - name: Comment on issue
-        if: steps.check_grant.outputs.granted == 'true'
+        if: always() && (steps.grant_team.outputs.success == 'true' || steps.grant_repo.outputs.success == 'true')
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           USERNAME: ${{ steps.parse.outputs.username }}
-          TARGET: ${{ steps.check_grant.outputs.target }}
-          TYPE: ${{ steps.check_grant.outputs.granted_type }}
-          PERMISSION: ${{ steps.check_grant.outputs.permission }}
+          TARGET: ${{ steps.parse.outputs.target }}
+          TYPE: ${{ steps.parse.outputs.type }}
+          PERMISSION: ${{ steps.parse.outputs.permission }}
           EXPIRATION: ${{ steps.expiration.outputs.expiration }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -407,7 +211,7 @@ jobs:
             -d "{\"body\": \"$COMMENT\"}"
 
       - name: Close issue (only for team-based)
-        if: success() && steps.check_grant.outputs.granted_type == 'team'
+        if: always() && steps.grant_team.outputs.success == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -421,7 +225,7 @@ jobs:
             -d "{\"state\": \"closed\"}"
 
       - name: Comment on issue (failure)
-        if: steps.check_grant.outputs.granted == 'false'
+        if: always() && steps.grant_team.outputs.success != 'true' && steps.grant_repo.outputs.success != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
