@@ -9,6 +9,9 @@ permissions:
   contents: read
   issues: write
 
+env:
+  SUPPORT_USERS: "pujadas02"
+
 concurrency:
   group: grant-access-${{ github.event.issue.number }}
   cancel-in-progress: false
@@ -101,7 +104,6 @@ jobs:
           LABELS: ${{ steps.get_issue.outputs.labels }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          SUPPORT_USERS: "pujadas02"
         run: |
           if [[ "$EVENT_LABEL" == "approved" ]]; then
             if printf '%s\n' "$LABELS" | grep -Fxq "access-granted"; then
@@ -345,7 +347,6 @@ jobs:
         if: failure()
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          SUPPORT_USERS: "pujapuja"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
