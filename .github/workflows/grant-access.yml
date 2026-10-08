@@ -120,6 +120,9 @@ jobs:
               exit 1
             fi
             echo "'$ACTOR' is an authorized support user."
+          else
+            echo "Error: Unsupported label trigger '$EVENT_LABEL'."
+            exit 1
           fi
 
       - name: Calculate expiration
@@ -266,7 +269,7 @@ jobs:
             -d "{\"state\": \"closed\"}"
 
       - name: Handle workflow failure
-        if: always() && job.status == 'failure'
+        if: failure()
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           SUPPORT_USERS: "pujapuja"
