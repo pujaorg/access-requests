@@ -57,27 +57,24 @@ jobs:
           echo "body<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.body' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-
           echo "labels<<EOF" >> $GITHUB_OUTPUT
           cat issue.json | jq -r '.labels[].name' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Parse request details
         id: parse
+        env:
+          BODY: ${{ steps.get_issue.outputs.body }}
+          LABELS: ${{ steps.get_issue.outputs.labels }}
         run: |
-          BODY="${{ steps.get_issue.outputs.body }}"
-          LABELS="${{ steps.get_issue.outputs.labels }}"
-
           extract_value() {
             local field="$1"
             local body="$2"
             local value
-
             if ! printf '%s\n' "$body" | grep -Fqx "### $field"; then
               echo ""
               return
             fi
-
             value=$(printf '%s\n' "$body" |
               awk -v field="### $field" '
                 $0 == field {
