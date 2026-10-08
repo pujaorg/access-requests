@@ -48,12 +48,14 @@ jobs:
             echo "::error::Failed to get issue details. HTTP code: $RESPONSE"
             exit 1
           fi
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          cat issue.json | jq -r '.body' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "labels<<EOF" >> $GITHUB_OUTPUT
-          cat issue.json | jq -r '.labels[].name' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          BODY_DELIMITER=$(openssl rand -hex 16)
+          LABELS_DELIMITER=$(openssl rand -hex 16)
+          echo "body<<$BODY_DELIMITER" >> "$GITHUB_OUTPUT"
+          jq -r '.body' issue.json >> "$GITHUB_OUTPUT"
+          echo "$BODY_DELIMITER" >> "$GITHUB_OUTPUT"
+          echo "labels<<$LABELS_DELIMITER" >> "$GITHUB_OUTPUT"
+          jq -r '.labels[].name' issue.json >> "$GITHUB_OUTPUT"
+          echo "$LABELS_DELIMITER" >> "$GITHUB_OUTPUT"
 
       - name: Parse request details
         id: parse
