@@ -591,8 +591,18 @@
     // Validation
     // ============================================================
     function validateUsername(usernameValue) {
-        if (!usernameValue || usernameValue.trim().length === 0) {
+        const val = usernameValue.trim();
+
+        if (!val) {
             usernameFeedback.textContent = 'Please select your GitHub username.';
+            usernameFeedback.className = 'feedback error';
+            return false;
+        }
+
+        const exists = allMembers.some(member => member.login === val);
+
+        if (!exists) {
+            usernameFeedback.textContent = 'Please select a valid GitHub username.';
             usernameFeedback.className = 'feedback error';
             return false;
         }
@@ -634,6 +644,14 @@
             return false;
         }
 
+        const exists = APPROVERS.includes(val);
+
+        if (!exists) {
+            approverFeedback.textContent = 'Please select a valid approver.';
+            approverFeedback.className = 'feedback error';
+            return false;
+        }
+
         return true;
     }
 
@@ -648,6 +666,14 @@
             return false;
         }
 
+        const exists = allTeams.some(t => t.name === val);
+
+        if (!exists) {
+            teamFeedback.textContent = 'Please select a valid team.';
+            teamFeedback.className = 'feedback error';
+            return false;
+        }
+
         return true;
     }
 
@@ -658,6 +684,14 @@
 
         if (!val) {
             repoFeedback.textContent = 'Please select a repository.';
+            repoFeedback.className = 'feedback error';
+            return false;
+        }
+
+        const exists = allRepos.some(r => r.full_name === val);
+
+        if (!exists) {
+            repoFeedback.textContent = 'Please select a valid repository.';
             repoFeedback.className = 'feedback error';
             return false;
         }
