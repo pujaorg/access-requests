@@ -846,11 +846,19 @@
                 message.textContent = `❌ Failed to submit: ${error.message || 'Unknown error'}`;
                 message.className = 'message error';
                 message.style.display = 'block';
+
+                // Re-enable submit button so the user can retry.
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Confirm Submit';
             }
         } catch (err) {
             message.textContent = `❌ Error: ${err.message}`;
             message.className = 'message error';
             message.style.display = 'block';
+
+            // Re-enable submit button so the user can retry.
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Confirm Submit';
         }
     });
 
