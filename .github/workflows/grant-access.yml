@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   grant:
-    if: github.event.label.name == 'approved'
+    if: github.event.label.name == 'approved' || github.event.label.name == 'fixed'
     runs-on: ubuntu-latest
     steps:
       - name: Check if actor is authorized
@@ -19,7 +19,9 @@ jobs:
           ACTOR: ${{ github.actor }}
         run: |
           APPROVERS="pujadas02"
+          SUPPORT_USERS="pujapuja"
           IFS=',' read -r -a approver_array <<< "$APPROVERS"
+          IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
           AUTHORIZED=false
           for approver in "${approver_array[@]}"; do
             if [[ "$ACTOR" == "$approver" ]]; then
@@ -28,7 +30,15 @@ jobs:
             fi
           done
           if [[ "$AUTHORIZED" == "false" ]]; then
-            echo "Error: '$ACTOR' is not an authorized approver!"
+            for support_user in "${support_array[@]}"; do
+              if [[ "$ACTOR" == "$support_user" ]]; then
+                AUTHORIZED=true
+                break
+              fi
+            done
+          fi
+          if [[ "$AUTHORIZED" == "false" ]]; then
+            echo "Error: '$ACTOR' is not an authorized user!"
             exit 1
           fi
           echo "'$ACTOR' is authorized."
@@ -126,17 +136,41 @@ jobs:
         run: |
           echo "Adding $USERNAME to team $TEAM..."
           ORG="${{ github.repository_owner }}"
+          TEAM_SLUG=""
+          PAGE=1
+          while true; do
+            echo "Searching teams page $PAGE..."
+            RESPONSE=$(curl -s \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/orgs/$ORG/teams?per_page=100&page=$PAGE")
+            MATCH=$(echo "$RESPONSE" | jq -r --arg TEAM "$TEAM" '
+              .[] |
+              select(.name == $TEAM or .slug == $TEAM) |
+              .slug
+            ' | head -1)
+            if [ -n "$MATCH" ] && [ "$MATCH" != "null" ]; then
+              TEAM_SLUG="$MATCH"
+              echo "Team found. Resolved team slug: $TEAM_SLUG"
+              break
+            fi
+            TEAM_COUNT=$(echo "$RESPONSE" | jq 'length')
+            if [ "$TEAM_COUNT" -lt 100 ]; then
+              echo "::error::Could not find team '$TEAM' in organization '$ORG'."
+              exit 1
+            fi
+            PAGE=$((PAGE + 1))
+          done
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/orgs/$ORG/teams/$TEAM/memberships/$USERNAME")
-
+            "https://api.github.com/orgs/$ORG/teams/$TEAM_SLUG/memberships/$USERNAME")
           if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
-            echo "success=true" >> $GITHUB_OUTPUT
-            echo "granted_type=team" >> $GITHUB_OUTPUT
+            echo "success=true" >> "$GITHUB_OUTPUT"
+            echo "granted_type=team" >> "$GITHUB_OUTPUT"
           else
-            echo "success=false" >> $GITHUB_OUTPUT
+            echo "success=false" >> "$GITHUB_OUTPUT"
             echo "Failed to add user to team. HTTP code: $RESPONSE"
             exit 1
           fi
@@ -158,10 +192,10 @@ jobs:
             "https://api.github.com/repos/$REPO/collaborators/$USERNAME" \
             -d "{\"permission\": \"$PERMISSION\"}")
           if [ "$RESPONSE" -eq 201 ] || [ "$RESPONSE" -eq 204 ]; then
-            echo "success=true" >> $GITHUB_OUTPUT
-            echo "granted_type=repo" >> $GITHUB_OUTPUT
+            echo "success=true" >> "$GITHUB_OUTPUT"
+            echo "granted_type=repo" >> "$GITHUB_OUTPUT"
           else
-            echo "success=false" >> $GITHUB_OUTPUT
+            echo "success=false" >> "$GITHUB_OUTPUT"
             echo "Failed to grant access. HTTP code: $RESPONSE"
             exit 1
           fi
@@ -180,15 +214,33 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
             -d "{\"labels\": [\"expires-$EXPIRATION\"]}")
-
           if [ "$RESPONSE" -eq 200 ]; then
-            echo "success=true" >> $GITHUB_OUTPUT
+            echo "success=true" >> "$GITHUB_OUTPUT"
             echo "Expiration label added successfully."
           else
-            echo "success=false" >> $GITHUB_OUTPUT
+            echo "success=false" >> "$GITHUB_OUTPUT"
             echo "::error::Failed to add expiration label. HTTP code: $RESPONSE"
             exit 1
           fi
+
+      - name: Add access-failed label
+        if: always() && steps.grant_team.outputs.success != 'true' && steps.grant_repo.outputs.success != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
+            -d '{"labels":["access-failed"]}')
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "access-failed label added successfully."
+          else
+            echo "::error::Failed to add access-failed label. HTTP code: $RESPONSE"
+          fi
+
       - name: Comment on issue
         if: always() && (steps.grant_team.outputs.success == 'true' || steps.grant_repo.outputs.success == 'true')
         env:
@@ -201,11 +253,10 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if [ "$TYPE" == "team" ]; then
-            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Status:** User has been added to the team."
+            COMMENT="**Access Granted!**\n\n- **User:** @$USERNAME\n- **Team:** $TARGET\n- **Status:** User has been added to the team."
           else
-            COMMENT=" **Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:** Access has been granted."
+            COMMENT="**Access Granted!**\n\n- **User:** @$USERNAME\n- **Repository:** $TARGET\n- **Permission:** $PERMISSION\n- **Expires:** $EXPIRATION UTC\n- **Status:** Access has been granted."
           fi
-
           curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
@@ -219,7 +270,6 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           echo "Closing issue #$ISSUE_NUMBER (team-based request)"
-
           curl -X PATCH \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
@@ -230,10 +280,18 @@ jobs:
         if: always() && steps.grant_team.outputs.success != 'true' && steps.grant_repo.outputs.success != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          SUPPORT_USERS: "pujapuja"
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          COMMENT=" **Access Not Granted!**\n\n- **Status:** Access could not be granted. Please check the workflow logs for details."
-
+          MENTIONS=""
+          IFS=',' read -r -a support_array <<< "$SUPPORT_USERS"
+          for support_user in "${support_array[@]}"; do
+            support_user=$(echo "$support_user" | xargs)
+            if [ -n "$support_user" ]; then
+              MENTIONS="$MENTIONS @$support_user"
+            fi
+          done
+          COMMENT="**Access could not be granted.**\n\n$MENTIONS\n\nPlease check the workflow and investigate the issue. Once the issue is resolved, add the \`fixed\` label to retry the request."
           curl -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
