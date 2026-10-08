@@ -268,6 +268,8 @@
                         <select id="permission">
                             <option value="pull" selected>Read</option>
                             <option value="push">Write</option>
+                            <option value="triage">Triage</option>
+                            <option value="maintain">Maintain</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
@@ -716,7 +718,7 @@
             body += `### GitHub Team Name\n${team.value.trim()}\n\n`;
         } else {
             body += `### Repository Name\n${repo.value.trim()}\n\n`;
-            body += `### Permission Level\n${permission.options[permission.selectedIndex].text}\n\n`;
+            body += `### Permission Level\n${permission.value}\n\n`;
             body += `### Duration\n${durationVal} days\n\n`;
         }
 
