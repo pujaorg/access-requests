@@ -94,19 +94,39 @@ jobs:
           EVENT_LABEL: ${{ github.event.label.name }}
           APPROVER: ${{ steps.parse.outputs.approver }}
           LABELS: ${{ steps.get_issue.outputs.labels }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
           SUPPORT_USERS: "pujapuja"
         run: |
           if [[ "$EVENT_LABEL" == "approved" ]]; then
+            if printf '%s\n' "$LABELS" | grep -Fxq "access-granted"; then
+              echo "Access has already been granted for this request."
+              exit 0
+            fi
             if [[ -z "$APPROVER" ]]; then
               echo "Error: No approver is specified in the issue."
               exit 1
             fi
             if [[ "$ACTOR" != "$APPROVER" ]]; then
               echo "Error: '$ACTOR' is not the approver specified in the issue."
+              RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X DELETE \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels/approved")
+              if [ "$RESPONSE" -eq 200 ]; then
+                echo "Unauthorized 'approved' label removed."
+              else
+                echo "::error::Failed to remove unauthorized 'approved' label. HTTP code: $RESPONSE"
+              fi
               exit 1
             fi
             echo "'$ACTOR' matches the approver specified in the issue."
           elif [[ "$EVENT_LABEL" == "fixed" ]]; then
+            if printf '%s\n' "$LABELS" | grep -Fxq "access-granted"; then
+              echo "Access has already been granted for this request."
+              exit 0
+            fi
             if ! printf '%s\n' "$LABELS" | grep -Fxq "approved"; then
               echo "Error: The issue must have the 'approved' label before 'fixed' can trigger a retry."
               exit 1
@@ -212,6 +232,26 @@ jobs:
           else
             echo "success=false" >> "$GITHUB_OUTPUT"
             echo "Failed to grant access. HTTP code: $RESPONSE"
+            exit 1
+          fi
+
+      - name: Add access-granted label
+        id: add_access_granted
+        if: steps.grant_team.outputs.success == 'true' || steps.grant_repo.outputs.success == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
+            -d '{"labels":["access-granted"]}')
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "access-granted label added successfully."
+          else
+            echo "::error::Failed to add access-granted label. HTTP code: $RESPONSE"
             exit 1
           fi
 
