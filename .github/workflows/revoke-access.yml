@@ -1,12 +1,13 @@
 name: Revoke Expired Access
 on:
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 permissions:
   issues: write
 env:
   SUPPORT_USERS: "pujadas02"
+  API_VERSION: "2026-03-10"
 concurrency:
   group: revoke-expired-access
   cancel-in-progress: false
@@ -26,10 +27,48 @@ jobs:
           FAILED=false
           CURRENT_ISSUE=""
 
+          USERNAME_REGEX='^[A-Za-z0-9]([A-Za-z0-9-]{0,38})$'
+
+          # Prints the HTTP status code only. Always prints a code (000 on connection failure).
+          http_status() {
+            local method="$1"
+            local url="$2"
+            local code
+            code=$(curl -sS --max-time 30 -o /dev/null -w "%{http_code}" \
+              -X "$method" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "$url") || true
+            printf '%s' "${code:-000}"
+          }
+
+          ensure_label() {
+            local name="$1"
+            local color="$2"
+            local description="$3"
+
+            if gh api "repos/$REPO/labels/$name" --silent 2>/dev/null; then
+              return 0
+            fi
+
+            echo "Label '$name' not found. Creating it."
+            if ! gh label create "$name" \
+              --repo "$REPO" \
+              --color "$color" \
+              --description "$description"; then
+              echo "Warning: could not create label '$name'."
+            fi
+          }
+
           extract_value() {
             local field="$1"
             local body="$2"
             local value
+
+            # Normalise Windows line endings (issue bodies edited in the UI can contain \r\n)
+            body=$(printf '%s\n' "$body" | tr -d '\r')
+
             if ! printf '%s\n' "$body" | grep -Fqx "### $field"; then
               echo ""
               return
@@ -45,10 +84,39 @@ jobs:
                   exit
                 }
               ')
-            if [[ "$value" == "---"* || "$value" == "###"* ]]; then
+            value=$(printf '%s\n' "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+            if [[ "$value" == "---"* || "$value" == "###"* || "$value" == "_No response_" ]]; then
               value=""
             fi
-            printf '%s\n' "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+            printf '%s\n' "$value"
+          }
+
+          # Accepts "repo" or "<this org>/repo". Prints "<org>/repo" or fails.
+          normalize_repo() {
+            local input="$1"
+            local owner
+            local name
+
+            if [[ "$input" == */* ]]; then
+              owner="${input%%/*}"
+              name="${input#*/}"
+            else
+              owner="$ORG"
+              name="$input"
+            fi
+
+            if [[ "${owner,,}" != "${ORG,,}" ]]; then
+              return 1
+            fi
+            if ! [[ "$name" =~ ^[A-Za-z0-9._-]{1,100}$ ]]; then
+              return 1
+            fi
+            if [[ "$name" == "." || "$name" == ".." ]]; then
+              return 1
+            fi
+
+            printf '%s/%s' "$ORG" "$name"
           }
 
           build_mentions() {
@@ -93,65 +161,77 @@ jobs:
             fi
           }
 
+          # Return codes:
+          #   0 = direct collaborator access removed
+          #   1 = failure
+          #   2 = nothing to remove, access was already gone
+          #   3 = direct access removed (if any), but user still has access via team/org permissions
           revoke_repo() {
             local user="$1"
             local repo="$2"
             local status
-
-            [[ "$repo" != *"/"* ]] && repo="$ORG/$repo"
+            local collab_json
+            local is_direct
+            local removed_something=false
 
             echo "Checking access for $user on repo $repo"
 
-            status=$(curl -sS -o /dev/null -w "%{http_code}" \
-              -H "Authorization: Bearer $GH_TOKEN" \
+            # 1. Direct collaborator access
+            if ! collab_json=$(gh api --paginate --slurp \
               -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2026-03-10" \
-              "https://api.github.com/repos/$repo/collaborators/$user" || printf '000')
-
-            if [ "$status" = "404" ]; then
-              echo "User $user is already removed from repo $repo"
-              return 2
-            fi
-
-            if [ "$status" != "204" ] && [ "$status" != "200" ]; then
-              if [ "$status" = "000" ]; then
-                echo "Could not determine collaborator status"
-              else
-                echo "Failed to check collaborator status. HTTP code: $status"
-              fi
+              -H "X-GitHub-Api-Version: $API_VERSION" \
+              "repos/$repo/collaborators?affiliation=direct&per_page=100"); then
+              echo "Failed to list direct collaborators for repo $repo"
               return 1
             fi
 
-            echo "User has access. Removing $user from repo $repo"
+            is_direct=$(printf '%s\n' "$collab_json" |
+              jq --arg u "${user,,}" \
+                '[.[][] | select((.login | ascii_downcase) == $u)] | length')
 
-            status=$(curl -sS -o /dev/null -w "%{http_code}" \
-              -X DELETE \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2026-03-10" \
-              "https://api.github.com/repos/$repo/collaborators/$user" || printf '000')
+            if [ "$is_direct" -gt 0 ]; then
+              echo "User is a direct collaborator. Removing $user from repo $repo"
+              status=$(http_status DELETE "https://api.github.com/repos/$repo/collaborators/$user")
 
-            if [ "$status" = "204" ]; then
-              echo "Collaborator removed successfully"
+              if [ "$status" = "204" ] || [ "$status" = "404" ]; then
+                removed_something=true
+                echo "Collaborator removed successfully"
+              else
+                echo "Failed to revoke collaborator access. HTTP code: $status"
+                return 1
+              fi
+            else
+              echo "User is not a direct collaborator on repo $repo"
+            fi
+
+            # 2. Verify the user truly has no remaining access (team / org / base permission)
+            status=$(http_status GET "https://api.github.com/repos/$repo/collaborators/$user")
+
+            if [ "$status" = "204" ] || [ "$status" = "200" ]; then
+              echo "User $user still has access to repo $repo through a team or organization permission"
+              return 3
+            fi
+
+            if [ "$status" != "404" ]; then
+              echo "Failed to verify collaborator status. HTTP code: $status"
+              return 1
+            fi
+
+            if [ "$removed_something" = true ]; then
               return 0
             fi
 
-            if [ "$status" = "404" ]; then
-              echo "User $user is already removed from repo $repo"
-              return 2
-            fi
-
-            if [ "$status" = "000" ]; then
-              echo "Failed to revoke collaborator access"
-            else
-              echo "Failed to revoke collaborator access. HTTP code: $status"
-            fi
-            return 1
+            echo "User $user is already removed from repo $repo"
+            return 2
           }
+
+          # Make sure the labels used for error handling exist
+          ensure_label "revoke-error" "d73a4a" "Automatic access revocation failed"
+          ensure_label "revoke-fixed" "0e8a16" "Revocation issue fixed, retry requested"
 
           gh api --paginate --slurp \
             -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2026-03-10" \
+            -H "X-GitHub-Api-Version: $API_VERSION" \
             "repos/$REPO/issues?state=open&labels=access-request%2Crepo-based&per_page=100" |
             jq '[.[][] | select(.pull_request == null) | {number, body, labels: [.labels[].name]}]' > issues.json
 
@@ -282,23 +362,43 @@ jobs:
               continue
             fi
 
+            if ! [[ "$USERNAME" =~ $USERNAME_REGEX ]]; then
+              report_error "$CURRENT_ISSUE" \
+                "The GitHub username is not in a valid format. Access was not revoked. Please investigate."
+              continue
+            fi
+
+            if ! FULL_REPO=$(normalize_repo "$REPO_NAME"); then
+              report_error "$CURRENT_ISSUE" \
+                "The repository name is invalid or does not belong to this organization. Access was not revoked. Please investigate."
+              continue
+            fi
+
+            echo "Resolved repo: $FULL_REPO"
+
             set +e
-            revoke_repo "$USERNAME" "$REPO_NAME"
+            revoke_repo "$USERNAME" "$FULL_REPO"
             REVOKE_RESULT=$?
             set -e
 
             if [ "$REVOKE_RESULT" -eq 1 ]; then
               report_error "$CURRENT_ISSUE" \
-                "Failed to revoke access from repo: $REPO_NAME. Access was not revoked. Please investigate."
+                "Failed to revoke access from repo: $FULL_REPO. Access was not revoked. Please investigate."
+              continue
+            fi
+
+            if [ "$REVOKE_RESULT" -eq 3 ]; then
+              report_error "$CURRENT_ISSUE" \
+                "Direct access was handled, but $USERNAME still has access to $FULL_REPO through a team, organization role, or base permission. Remove it there manually. Please investigate."
               continue
             fi
 
             if [ "$REVOKE_RESULT" -eq 2 ]; then
-              echo "Access was already removed from repo: $REPO_NAME"
+              echo "Access was already removed from repo: $FULL_REPO"
               COMMENT=$(printf '%s\n\n%s' \
                 "**Access Revoked!**" \
                 "- **User:** @$USERNAME
-              - **Repository:** $REPO_NAME
+              - **Repository:** $FULL_REPO
               - **Status:** Access was already removed. No revocation was required.")
 
               if ! gh issue comment "$CURRENT_ISSUE" \
@@ -309,11 +409,11 @@ jobs:
                 continue
               fi
             else
-              echo "Access revoked from repo: $REPO_NAME"
+              echo "Access revoked from repo: $FULL_REPO"
               COMMENT=$(printf '%s\n\n%s' \
                 "**Access Revoked!**" \
                 "- **User:** @$USERNAME
-                - **Repository:** $REPO_NAME
+                - **Repository:** $FULL_REPO
                 - **Status:** Access has been revoked.")
 
               if ! gh issue comment "$CURRENT_ISSUE" \
@@ -329,7 +429,7 @@ jobs:
 
             OTHER_ISSUES=$(gh api --paginate --slurp \
               -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2026-03-10" \
+              -H "X-GitHub-Api-Version: $API_VERSION" \
               "repos/$REPO/issues?state=open&labels=$(printf '%s' "$EXPIRATION_LABEL" | jq -sRr @uri)&per_page=100" |
               jq --arg current "$CURRENT_ISSUE" \
                 '[.[][] |
@@ -393,10 +493,12 @@ jobs:
 
               echo "Expiration label removed from issue."
             fi
+
           done < <(jq -c '.[]' issues.json)
 
           if [ "$FAILED" = true ]; then
             echo "Revocation completed with errors."
             exit 1
           fi
+
           echo "Revocation complete."
