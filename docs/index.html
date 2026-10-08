@@ -444,10 +444,6 @@
 
     // ============================================================
     // Generic searchable dropdown
-    // Replaces the four near-identical username/team/repo/approver
-    // blocks from the original file with one reusable factory.
-    // Behavior (click to open, live search, loading state, clear
-    // button, outside-click to close) is identical for every field.
     // ============================================================
 
     const dropdowns = [];
@@ -582,7 +578,7 @@
     });
 
     // ============================================================
-    // Justification character counter (live, no validation)
+    // Justification character counter
     // ============================================================
     justification.addEventListener('input', () => {
         charCount.textContent = justification.value.length;
@@ -669,9 +665,9 @@
     function validateDuration() {
         if (accessType.value !== 'repo') return true;
 
-        const val = parseInt(duration.value);
+        const val = Number(duration.value);
 
-        if (isNaN(val) || val < 1 || val > 30) {
+        if (!Number.isInteger(val) || val < 1 || val > 30) {
             durationFeedback.textContent = 'Duration must be between 1 and 30 days.';
             durationFeedback.className = 'feedback error';
             return false;
@@ -789,7 +785,7 @@
     });
 
     // ============================================================
-    // Submit handler (bound to form submit so Enter key works too)
+    // Submit handler
     // ============================================================
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
