@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   add-to-project:
+    if: contains(github.event.issue.labels.*.name, 'access-request')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Add issue to project
         env:
@@ -20,27 +22,36 @@ jobs:
           PROJECT_ID: "PVT_kwDOEi48RM4BeAPn"
           ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
         run: |
+          set -eu
           echo "Adding issue to project..."
           echo "PROJECT_ID: $PROJECT_ID"
           echo "ISSUE_NODE_ID: $ISSUE_NODE_ID"
 
-          RESPONSE=$(gh api graphql -f query='
-            mutation($project:ID!,$issue:ID!){
-              addProjectV2ItemById(input:{
-                projectId:$project
-                contentId:$issue
-              }){
-                item{
-                  id
+          ITEM_ID=""
+          for attempt in 1 2 3; do
+            # -f sends plain strings (no type guessing). The mutation is idempotent:
+            # adding an issue that is already on the board returns the existing item.
+            if RESPONSE=$(gh api graphql -f query='
+              mutation($project:ID!,$issue:ID!){
+                addProjectV2ItemById(input:{
+                  projectId:$project
+                  contentId:$issue
+                }){
+                  item{
+                    id
+                  }
                 }
-              }
-            }' -F project="$PROJECT_ID" -F issue="$ISSUE_NODE_ID")
+              }' -f project="$PROJECT_ID" -f issue="$ISSUE_NODE_ID" 2>&1); then
+              ITEM_ID=$(printf '%s' "$RESPONSE" | jq -r '.data.addProjectV2ItemById.item.id // empty')
+              if [ -n "$ITEM_ID" ]; then
+                break
+              fi
+            fi
+            echo "Attempt $attempt failed: $RESPONSE"
+            sleep $((attempt * 5))
+          done
 
-          echo "Response: $RESPONSE"
-
-          ITEM_ID=$(echo "$RESPONSE" | jq -r '.data.addProjectV2ItemById.item.id')
-
-          if [ -z "$ITEM_ID" ] || [ "$ITEM_ID" == "null" ]; then
+          if [ -z "$ITEM_ID" ]; then
             echo "::error::Failed to add issue to project"
             exit 1
           fi
